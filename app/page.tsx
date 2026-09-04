@@ -507,7 +507,10 @@ export default function HomePage() {
           </p>
 
           {/* Social proof */}
-          <div className="flex flex-wrap items-center gap-6 mt-8">
+          <div
+            className="inline-flex flex-wrap items-center gap-6 mt-8 px-4 py-3 rounded-full border border-white/8"
+            style={{ background: "rgba(255,255,255,0.02)" }}
+          >
             <div className="flex items-center gap-2">
               <div className="flex -space-x-2">
                 {["stripe.com", "linear.app", "notion.so", "loom.com"].map((domain, i) => (
@@ -521,6 +524,7 @@ export default function HomePage() {
               </div>
               <span className="text-xs text-white/30">2,400+ pages roasted</span>
             </div>
+            <div className="w-px h-4 bg-white/8" />
             <div className="flex items-center gap-1.5">
               {[1, 2, 3, 4, 5].map((i) => (
                 <svg key={i} className="w-3.5 h-3.5 text-white/50 fill-current" viewBox="0 0 20 20">
@@ -615,15 +619,28 @@ export default function HomePage() {
           ].map((card) => (
             <div
               key={card.title}
-              className="rounded-xl border border-white/8 p-5 transition-all duration-300 hover:border-white/15"
+              className="group rounded-xl border border-white/8 p-5 transition-all duration-300 hover:border-white/15 hover:-translate-y-0.5"
               style={{ background: "rgba(255,255,255,0.02)" }}
             >
-              <div className="text-2xl mb-3">{card.icon}</div>
+              <div
+                className="w-10 h-10 rounded-lg border border-white/8 flex items-center justify-center text-lg mb-4 transition-colors duration-300 group-hover:border-white/20"
+                style={{ background: "rgba(255,255,255,0.04)" }}
+              >
+                {card.icon}
+              </div>
               <h3 className="text-sm font-semibold text-white mb-1">{card.title}</h3>
               <p className="text-xs text-white/30 leading-relaxed">{card.desc}</p>
             </div>
           ))}
         </div>
+
+        {/* Footer */}
+        <footer className="mt-20 pt-8 border-t border-white/8 flex flex-wrap items-center justify-between gap-4 text-xs text-white/20">
+          <span>© 2025 Brutal Roaster</span>
+          <a href="mailto:rosterai@gmail.com" className="hover:text-white/50 transition-colors">
+            rosterai@gmail.com
+          </a>
+        </footer>
       </div>
     </div>
   );

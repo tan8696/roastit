@@ -183,24 +183,30 @@ function PaywallContent() {
               key={tier.id}
               className={`relative rounded-2xl border p-7 flex flex-col transition-all duration-300 ${
                 tier.id === "basic"
-                  ? "border-white/25 bg-white/[0.06]"
-                  : "border-white/10 bg-white/[0.02]"
+                  ? "border-white/25 bg-white/[0.06] md:-translate-y-2"
+                  : "border-white/10 bg-white/[0.02] hover:border-white/20"
               }`}
               style={
                 tier.id === "basic"
-                  ? { boxShadow: "0 0 40px rgba(255,255,255,0.06), 0 25px 60px rgba(0,0,0,0.5)" }
+                  ? { boxShadow: "0 0 50px rgba(255,255,255,0.08), 0 30px 70px rgba(0,0,0,0.55)" }
                   : {}
               }
             >
               {/* Badge */}
-              <div className="mb-5">
-                <span className={`inline-block text-xs font-bold px-2.5 py-1 rounded-full ${tier.badgeStyle}`}>
+              {tier.id === "basic" ? (
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 inline-block text-xs font-bold px-3 py-1 rounded-full bg-white text-black shadow-[0_4px_16px_rgba(255,255,255,0.25)] whitespace-nowrap">
                   {tier.badge}
                 </span>
-              </div>
+              ) : (
+                <div className="mb-5">
+                  <span className={`inline-block text-xs font-bold px-2.5 py-1 rounded-full ${tier.badgeStyle}`}>
+                    {tier.badge}
+                  </span>
+                </div>
+              )}
 
               {/* Name & price */}
-              <div className="mb-5">
+              <div className={`mb-5 ${tier.id === "basic" ? "mt-2" : ""}`}>
                 <h2 className="text-xl font-black text-white mb-2">{tier.name}</h2>
                 <div className="flex items-baseline gap-1">
                   {tier.price ? (

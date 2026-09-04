@@ -572,11 +572,8 @@ function BoardroomContent() {
 
   // Auth check
   useEffect(() => {
-    if (status === "unauthenticated") {
-      const flag = sessionStorage.getItem("brutal_auth");
-      if (!flag) { router.replace("/login"); return; }
-    }
-    if (status !== "loading") setAuthed(true);
+    if (status === "unauthenticated") { router.replace("/login"); return; }
+    if (status === "authenticated") setAuthed(true);
   }, [status, router]);
 
   // Init credits + history
@@ -714,9 +711,7 @@ function BoardroomContent() {
   }
 
   async function handleSignOut() {
-    sessionStorage.removeItem("brutal_auth");
-    if (session) await signOut({ callbackUrl: "/login" });
-    else router.replace("/login");
+    await signOut({ callbackUrl: "/login" });
   }
 
   const depleted = creditState ? creditState.tokens < 1 : false;

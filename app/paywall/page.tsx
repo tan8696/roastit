@@ -82,11 +82,8 @@ function PaywallContent() {
   const { data: session, status } = useSession();
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const flag = sessionStorage.getItem("brutal_auth");
-      if (!flag && status === "unauthenticated") {
-        router.replace("/login");
-      }
+    if (status === "unauthenticated") {
+      router.replace("/login");
     }
   }, [router, status]);
 

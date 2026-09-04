@@ -9,6 +9,8 @@ const Scanner = dynamic(() => import("@/components/Scanner"), { ssr: false });
 
 export default function LoginPage() {
   const router = useRouter();
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -16,18 +18,54 @@ export default function LoginPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     if (!email.trim() || !password.trim()) {
       setError("Please enter your credentials.");
       return;
     }
+    if (mode === "signup" && password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
     setLoading(true);
-    setTimeout(() => {
-      sessionStorage.setItem("brutal_auth", "1");
+    try {
+      if (mode === "signup") {
+        const res = await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.trim(), password, name: name.trim() }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.error || "Could not create account.");
+          setLoading(false);
+          return;
+        }
+      }
+
+      const result = await signIn("credentials", {
+        email: email.trim(),
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError(
+          mode === "signup"
+            ? "Account created, but sign-in failed. Try signing in below."
+            : "Invalid email or password."
+        );
+        setLoading(false);
+        return;
+      }
+
       router.push("/");
-    }, 600);
+    } catch {
+      setError("Something went wrong. Please try again.");
+      setLoading(false);
+    }
   }
 
   async function handleGoogleSignIn() {
@@ -161,8 +199,12 @@ export default function LoginPage() {
             boxShadow: "0 25px 80px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.07)",
           }}
         >
-          <h2 className="text-lg font-semibold text-white mb-1">Sign in</h2>
-          <p className="text-xs text-white/30 mb-6">Access your teardown dashboard</p>
+          <h2 className="text-lg font-semibold text-white mb-1">
+            {mode === "signin" ? "Sign in" : "Create your account"}
+          </h2>
+          <p className="text-xs text-white/30 mb-6">
+            {mode === "signin" ? "Access your teardown dashboard" : "Start roasting landing pages in seconds"}
+          </p>
 
           {/* Google OAuth Button */}
           <button
@@ -192,12 +234,32 @@ export default function LoginPage() {
           {/* Divider */}
           <div className="flex items-center gap-3 mb-5">
             <div className="flex-1 h-px bg-white/8" />
-            <span className="text-xs text-white/25">or sign in with email</span>
+            <span className="text-xs text-white/25">
+              or {mode === "signin" ? "sign in" : "sign up"} with email
+            </span>
             <div className="flex-1 h-px bg-white/8" />
           </div>
 
           {/* Email/Password form */}
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {mode === "signup" && (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-white/45 font-medium" htmlFor="login-name">
+                  Name
+                </label>
+                <input
+                  id="login-name"
+                  type="text"
+                  autoComplete="name"
+                  placeholder="Your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={loading || googleLoading}
+                  className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/20 text-sm transition-all duration-200 disabled:opacity-50 focus:outline-none focus:border-white/30"
+                />
+              </div>
+            )}
+
             <div className="flex flex-col gap-1">
               <label className="text-xs text-white/45 font-medium" htmlFor="login-email">
                 Email
@@ -221,7 +283,7 @@ export default function LoginPage() {
               <input
                 id="login-password"
                 type="password"
-                autoComplete="current-password"
+                autoComplete={mode === "signin" ? "current-password" : "new-password"}
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -248,24 +310,27 @@ export default function LoginPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
-                  Authenticating…
+                  {mode === "signin" ? "Signing in…" : "Creating account…"}
                 </span>
-              ) : (
+              ) : mode === "signin" ? (
                 "Sign In →"
+              ) : (
+                "Create Account →"
               )}
             </button>
           </form>
 
           <p className="mt-5 text-center text-xs text-white/20">
-            No account?{" "}
+            {mode === "signin" ? "No account?" : "Already have an account?"}{" "}
             <button
+              type="button"
               onClick={() => {
-                sessionStorage.setItem("brutal_auth", "1");
-                router.push("/");
+                setError("");
+                setMode(mode === "signin" ? "signup" : "signin");
               }}
               className="text-white/45 hover:text-white underline underline-offset-2 cursor-pointer transition-colors"
             >
-              Try the demo
+              {mode === "signin" ? "Create one" : "Sign in"}
             </button>
           </p>
         </div>

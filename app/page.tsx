@@ -359,26 +359,17 @@ function AccountMenu({
 export default function HomePage() {
   const router = useRouter();
   const { data: session, status } = useSession();
-  const [legacyAuthed, setLegacyAuthed] = useState(false);
   const [url, setUrl] = useState("");
   const [urlError, setUrlError] = useState("");
   const [showFeedback, setShowFeedback] = useState(false);
 
-  // Support both NextAuth sessions and legacy sessionStorage auth
   useEffect(() => {
     if (status === "unauthenticated") {
-      if (typeof window !== "undefined") {
-        const flag = sessionStorage.getItem("brutal_auth");
-        if (!flag) {
-          router.replace("/login");
-        } else {
-          setLegacyAuthed(true);
-        }
-      }
+      router.replace("/login");
     }
   }, [status, router]);
 
-  const isAuthed = status === "authenticated" || legacyAuthed;
+  const isAuthed = status === "authenticated";
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -393,23 +384,12 @@ export default function HomePage() {
   }
 
   async function handleSignOut() {
-    sessionStorage.removeItem("brutal_auth");
-    if (session) {
-      await signOut({ callbackUrl: "/login" });
-    } else {
-      router.replace("/login");
-    }
+    await signOut({ callbackUrl: "/login" });
   }
 
   async function handleDeleteAccount() {
     // In a real app: call DELETE /api/user here
-    // For now: clear all auth and redirect
-    sessionStorage.clear();
-    if (session) {
-      await signOut({ callbackUrl: "/login" });
-    } else {
-      router.replace("/login");
-    }
+    await signOut({ callbackUrl: "/login" });
   }
 
   if (status === "loading") {

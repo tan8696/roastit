@@ -766,9 +766,19 @@ function BoardroomContent() {
       </div>
       <div className="fixed inset-0 bg-black/88 z-[1]" />
 
+      {/* Mobile backdrop — sidebar is an overlay below md, not a layout push */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/60 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* ── Sidebar ── */}
       <aside
-        className={`relative z-20 flex flex-col border-r border-white/8 transition-all duration-300 shrink-0 ${sidebarOpen ? "w-72" : "w-0"} overflow-hidden`}
+        className={`fixed md:relative inset-y-0 left-0 z-40 md:z-20 flex flex-col border-r border-white/8 transition-transform md:transition-[width] duration-300 w-72 shrink-0 overflow-hidden ${
+          sidebarOpen ? "translate-x-0 md:w-72" : "-translate-x-full md:translate-x-0 md:w-0"
+        }`}
         style={{ background: "rgba(8,8,8,0.97)", backdropFilter: "blur(20px)" }}
       >
         {/* Brand */}

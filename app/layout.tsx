@@ -5,7 +5,7 @@ import { SessionProvider } from "next-auth/react";
 import Script from "next/script";
 import { auth } from "@/auth";
 import { createClient } from "@supabase/supabase-js";
-import AdBanner from "@/components/AdBanner";
+import AdBannerWrapper from "@/components/AdBannerWrapper";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -19,7 +19,10 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://brutal-roaster.vercel.app";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Brutal Roaster — AI Landing Page Teardown & Business Advisor",
     template: "%s | Brutal Roaster",
@@ -45,7 +48,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://brutal-roaster.vercel.app",
+    url: SITE_URL,
     siteName: "Brutal Roaster",
     title: "Brutal Roaster — AI Landing Page Teardown",
     description:
@@ -86,26 +89,24 @@ export default async function RootLayout({
     }
   }
 
+  const adsenseClientId = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID;
+
   return (
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <head>
-        {!isPro && (
+        {!isPro && adsenseClientId && (
           <Script
             id="adsbygoogle-init"
             strategy="afterInteractive"
             crossOrigin="anonymous"
-            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID}`}
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`}
           />
         )}
       </head>
       <body className="font-sans bg-black text-white antialiased">
         <SessionProvider>
           {children}
-          {!isPro && (
-            <div className="fixed bottom-0 w-full z-50 bg-black/80 backdrop-blur-md border-t border-white/10">
-              <AdBanner />
-            </div>
-          )}
+          <AdBannerWrapper isPro={isPro} />
         </SessionProvider>
       </body>
     </html>

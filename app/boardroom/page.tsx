@@ -15,10 +15,13 @@ import Markdown from "react-markdown";
 import { createClient } from "@supabase/supabase-js";
 import AdBanner from "@/components/AdBanner";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-);
+// Guarded: createClient() throws synchronously if the URL is empty, which
+// would otherwise crash this entire page on load whenever Supabase env vars
+// aren't configured.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabase =
+  supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 const Scanner = dynamic(() => import("@/components/Scanner"), { ssr: false });
 
@@ -536,7 +539,7 @@ function BoardroomContent() {
 
   useEffect(() => {
     async function checkPro() {
-      if (session?.user?.id) {
+      if (session?.user?.id && supabase) {
         const { data } = await supabase
           .from("profiles")
           .select("is_pro_user")

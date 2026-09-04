@@ -564,6 +564,12 @@ function BoardroomContent() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
 
+  // On phones the 288px sidebar was eating almost the entire viewport,
+  // leaving the boardroom itself an unusable sliver. Start collapsed there.
+  useEffect(() => {
+    if (window.innerWidth < 768) setSidebarOpen(false);
+  }, []);
+
   // Auth check
   useEffect(() => {
     if (status === "unauthenticated") {

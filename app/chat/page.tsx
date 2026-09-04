@@ -305,6 +305,12 @@ function ChatContent() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // On phones the 288px sidebar was eating almost the entire viewport,
+  // leaving the chat itself an unusable sliver. Start collapsed there.
+  useEffect(() => {
+    if (window.innerWidth < 768) setSidebarOpen(false);
+  }, []);
+
   // Auth check
   useEffect(() => {
     if (status === "unauthenticated") {

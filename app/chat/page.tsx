@@ -286,7 +286,6 @@ function ChatContent() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const searchParams = useSearchParams();
-  const tierParam = searchParams.get("tier") as Tier | null;
   const urlParam = searchParams.get("url") || "";
   const sessionParam = searchParams.get("session") || "";
 
@@ -327,25 +326,44 @@ function ChatContent() {
   // Init: load specific session OR start fresh
   useEffect(() => {
     if (!authed && status !== "authenticated") return;
-    const resolvedTier: Tier = (tierParam === "pro" || tierParam === "basic") ? tierParam : "basic";
-    setTier(resolvedTier);
-    const ts = loadTokenState(resolvedTier);
-    setTokenState(ts);
 
-    // If ?session=id is in URL, load that session
-    if (sessionParam) {
-      const h = loadHistory();
-      const found = h.find(s => s.id === sessionParam);
-      if (found) {
-        setCurrentSessionId(found.id);
-        setMessages(found.messages);
-        setTier(found.tier);
+    (async () => {
+      // The tier used to come straight from the URL (?tier=pro), which
+      // meant anyone could type that in and get Pro limits for free.
+      // Now it's read from what was actually paid for.
+      let resolvedTier: Tier = "basic";
+      try {
+        const res = await fetch("/api/user/entitlement");
+        const data = await res.json();
+        if (!data.active) {
+          router.replace("/paywall");
+          return;
+        }
+        resolvedTier = data.tier === "pro" ? "pro" : "basic";
+      } catch {
+        router.replace("/paywall");
         return;
       }
-    }
 
-    // Otherwise start a fresh new chat
-    startNewChat(resolvedTier, ts, urlParam);
+      setTier(resolvedTier);
+      const ts = loadTokenState(resolvedTier);
+      setTokenState(ts);
+
+      // If ?session=id is in URL, load that session
+      if (sessionParam) {
+        const h = loadHistory();
+        const found = h.find(s => s.id === sessionParam);
+        if (found) {
+          setCurrentSessionId(found.id);
+          setMessages(found.messages);
+          setTier(found.tier);
+          return;
+        }
+      }
+
+      // Otherwise start a fresh new chat
+      startNewChat(resolvedTier, ts, urlParam);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed, status]);
 

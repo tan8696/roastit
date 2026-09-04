@@ -8,6 +8,33 @@ import { useSession } from "next-auth/react";
 
 const Scanner = dynamic(() => import("@/components/Scanner"), { ssr: false });
 
+declare global {
+  interface Window {
+    Razorpay: new (options: Record<string, unknown>) => { open: () => void };
+  }
+}
+
+// Mirrors app/api/razorpay/create-order/route.ts — for display only,
+// the server is the source of truth for what's actually charged.
+const TIER_PRICE_INR: Record<string, string> = {
+  basic: "₹1,299",
+  pro: "₹4,199",
+};
+
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (window.Razorpay) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
 const TIERS = [
   {
     id: "free",
@@ -80,12 +107,88 @@ function PaywallContent() {
   const searchParams = useSearchParams();
   const websiteUrl = searchParams.get("url") || "";
   const { data: session, status } = useSession();
+  const [payingTier, setPayingTier] = useState<string | null>(null);
+  const [payError, setPayError] = useState("");
 
   useEffect(() => {
     if (status === "unauthenticated") {
       router.replace("/login");
     }
   }, [router, status]);
+
+  async function handleUpgrade(tierId: string) {
+    if (!session?.user?.id) {
+      router.push("/login");
+      return;
+    }
+    setPayError("");
+    setPayingTier(tierId);
+
+    try {
+      const orderRes = await fetch("/api/razorpay/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tier: tierId }),
+      });
+      const order = await orderRes.json();
+      if (!orderRes.ok) {
+        setPayError(order.error || "Could not start checkout.");
+        setPayingTier(null);
+        return;
+      }
+
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) {
+        setPayError("Could not load the payment widget. Check your connection and try again.");
+        setPayingTier(null);
+        return;
+      }
+
+      const razorpay = new window.Razorpay({
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency,
+        order_id: order.orderId,
+        name: "Brutal Roaster",
+        description: `${tierId === "pro" ? "Pro" : "Starter"} plan — 30 days`,
+        prefill: {
+          name: session.user.name || undefined,
+          email: session.user.email || undefined,
+        },
+        theme: { color: "#ffffff" },
+        handler: async (response: {
+          razorpay_order_id: string;
+          razorpay_payment_id: string;
+          razorpay_signature: string;
+        }) => {
+          try {
+            const verifyRes = await fetch("/api/razorpay/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...response, tier: tierId }),
+            });
+            const verifyData = await verifyRes.json();
+            if (!verifyRes.ok || !verifyData.success) {
+              setPayError(verifyData.error || "Payment verification failed. Contact support if you were charged.");
+              setPayingTier(null);
+              return;
+            }
+            router.push(`/chat${websiteUrl ? `?url=${encodeURIComponent(websiteUrl)}` : ""}`);
+          } catch {
+            setPayError("Payment verification failed. Contact support if you were charged.");
+            setPayingTier(null);
+          }
+        },
+        modal: {
+          ondismiss: () => setPayingTier(null),
+        },
+      });
+      razorpay.open();
+    } catch {
+      setPayError("Something went wrong starting checkout. Please try again.");
+      setPayingTier(null);
+    }
+  }
 
   if (status === "loading") {
     return (
@@ -171,6 +274,11 @@ function PaywallContent() {
           <p className="text-white/40 text-base max-w-lg mx-auto mt-3">
             Unlock your full landing page teardown. Cancel anytime.
           </p>
+          {payError && (
+            <p className="mt-4 text-xs text-red-300 bg-red-500/8 border border-red-500/15 rounded-lg px-4 py-2 inline-block">
+              {payError}
+            </p>
+          )}
         </div>
 
         {/* Pricing cards */}
@@ -215,6 +323,11 @@ function PaywallContent() {
                     <span className="text-4xl font-black text-white/40">Free</span>
                   )}
                 </div>
+                {TIER_PRICE_INR[tier.id] && (
+                  <p className="text-white/30 text-[11px] mt-1">
+                    Charged as {TIER_PRICE_INR[tier.id]} — 30 days
+                  </p>
+                )}
                 <p className="text-white/40 text-xs mt-2 leading-relaxed">{tier.description}</p>
               </div>
 
@@ -246,24 +359,11 @@ function PaywallContent() {
               {/* CTA */}
               <button
                 id={`plan-${tier.id}-btn`}
-                disabled={tier.disabled}
-                onClick={() => {
-                  if (!tier.disabled) {
-                    if (!session?.user?.id) {
-                      router.push("/login");
-                      return;
-                    }
-                    const paymentLink = process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK;
-                    if (paymentLink) {
-                      window.location.href = `${paymentLink}?client_reference_id=${session.user.id}`;
-                    } else {
-                      alert("Stripe Payment Link is not configured.");
-                    }
-                  }
-                }}
-                className={`w-full py-3 rounded-xl font-bold text-sm transition-all duration-200 ${tier.ctaStyle}`}
+                disabled={tier.disabled || payingTier === tier.id}
+                onClick={() => !tier.disabled && handleUpgrade(tier.id)}
+                className={`w-full py-3 rounded-xl font-bold text-sm transition-all duration-200 disabled:opacity-60 disabled:cursor-wait ${tier.ctaStyle}`}
               >
-                {tier.cta}
+                {payingTier === tier.id ? "Opening checkout…" : tier.cta}
               </button>
             </div>
           ))}

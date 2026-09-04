@@ -79,11 +79,15 @@ export default async function RootLayout({
       );
       const { data } = await supabase
         .from("profiles") // assuming table is profiles
-        .select("is_pro_user")
+        .select("is_pro_user, tier_expires_at")
         .eq("id", session.user.id)
         .single();
 
-      if (data?.is_pro_user) {
+      if (
+        data?.is_pro_user &&
+        data?.tier_expires_at &&
+        new Date(data.tier_expires_at).getTime() > Date.now()
+      ) {
         isPro = true;
       }
     }

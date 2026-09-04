@@ -8,20 +8,11 @@ import {
   Suspense,
   useCallback,
 } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import dynamic from "next/dynamic";
 import Markdown from "react-markdown";
-import { createClient } from "@supabase/supabase-js";
 import AdBanner from "@/components/AdBanner";
-
-// Guarded: createClient() throws synchronously if the URL is empty, which
-// would otherwise crash this entire page on load whenever Supabase env vars
-// aren't configured.
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabase =
-  supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 const Scanner = dynamic(() => import("@/components/Scanner"), { ssr: false });
 
@@ -524,8 +515,6 @@ function PaywallModal({
 function BoardroomContent() {
   const router = useRouter();
   const { data: session, status } = useSession();
-  const searchParams = useSearchParams();
-  const tierParam = searchParams.get("tier") as Tier | null;
 
   const [authed, setAuthed] = useState(false);
   const [tier, setTier] = useState<Tier>("basic");
@@ -536,22 +525,6 @@ function BoardroomContent() {
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isProUser, setIsProUser] = useState<boolean>(false);
-
-  useEffect(() => {
-    async function checkPro() {
-      if (session?.user?.id && supabase) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("is_pro_user")
-          .eq("id", session.user.id)
-          .single();
-        if (data?.is_pro_user) {
-          setIsProUser(true);
-        }
-      }
-    }
-    checkPro();
-  }, [session?.user?.id, supabase]);
 
   const [loadingStage, setLoadingStage] = useState("routing");
   const [error, setError] = useState("");
@@ -576,15 +549,32 @@ function BoardroomContent() {
     if (status === "authenticated") setAuthed(true);
   }, [status, router]);
 
-  // Init credits + history
+  // Init credits + history — tier and pro status come from what was
+  // actually paid for (server-checked), not the URL: ?tier=pro used to
+  // hand out Pro-level limits to anyone who typed it in.
   useEffect(() => {
     if (!authed && status !== "authenticated") return;
-    const resolvedTier: Tier =
-      tierParam === "pro" || tierParam === "basic" ? tierParam : "basic";
-    setTier(resolvedTier);
-    setCreditState(loadCreditState(resolvedTier));
-    setHistory(loadHistory());
-  }, [authed, status, tierParam]);
+
+    (async () => {
+      let resolvedTier: Tier = "basic";
+      try {
+        const res = await fetch("/api/user/entitlement");
+        const data = await res.json();
+        if (!data.active) {
+          router.replace("/paywall");
+          return;
+        }
+        resolvedTier = data.tier === "pro" ? "pro" : "basic";
+        setIsProUser(true);
+      } catch {
+        router.replace("/paywall");
+        return;
+      }
+      setTier(resolvedTier);
+      setCreditState(loadCreditState(resolvedTier));
+      setHistory(loadHistory());
+    })();
+  }, [authed, status, router]);
 
   // Scroll to result
   useEffect(() => {
@@ -733,18 +723,7 @@ function BoardroomContent() {
       {showPaywall && (
         <PaywallModal
           onClose={() => setShowPaywall(false)}
-          onUpgrade={(t) => {
-            if (!session?.user?.id) {
-              router.push("/login");
-              return;
-            }
-            const paymentLink = process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK;
-            if (paymentLink) {
-              window.location.href = `${paymentLink}?client_reference_id=${session.user.id}`;
-            } else {
-              alert("Stripe Payment Link is not configured.");
-            }
-          }}
+          onUpgrade={() => router.push("/paywall")}
         />
       )}
       {/* Scanner background */}
@@ -953,12 +932,12 @@ function BoardroomContent() {
 
               {/* Massive Upgrade to Pro Button */}
               {!isProUser && session?.user?.id && (
-                <a
-                  href={`${process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK}?client_reference_id=${session.user.id}`}
-                  className="inline-block w-full text-center px-8 py-4 mb-8 rounded-xl font-black text-lg bg-gradient-to-r from-red-600 to-red-500 text-white shadow-[0_0_30px_rgba(220,38,38,0.5)] hover:shadow-[0_0_50px_rgba(220,38,38,0.7)] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] border border-red-400/50"
+                <button
+                  onClick={() => router.push("/paywall")}
+                  className="inline-block w-full text-center px-8 py-4 mb-8 rounded-xl font-black text-lg bg-gradient-to-r from-red-600 to-red-500 text-white shadow-[0_0_30px_rgba(220,38,38,0.5)] hover:shadow-[0_0_50px_rgba(220,38,38,0.7)] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] border border-red-400/50 cursor-pointer"
                 >
                   ⚡ UPGRADE TO PRO NOW ⚡
-                </a>
+                </button>
               )}
             </div>
 

@@ -209,6 +209,9 @@ export async function POST(request: Request) {
   }
 
   // ── STEP 1: Router Agent ──────────────────────────────────────────────────
+  // Not streamed: its own output IS the general-answer reply, and we can't
+  // tell whether it's about to say the literal word "EVALUATE" until it's
+  // done, so there's nothing useful to show live for this short, fast call.
   let routerResponse: string;
   try {
     const routerModel = getModel(ROUTER_INSTRUCTION);
@@ -222,61 +225,79 @@ export async function POST(request: Request) {
     );
   }
 
-  // ── GENERAL ANSWER PATH ───────────────────────────────────────────────────
-  if (routerResponse !== "EVALUATE") {
-    // Generate suggested follow-ups in parallel with returning the answer
-    const suggestedQuestions = await generateSuggestedQuestions(
-      `User asked: "${startupIdea}"\nAssistant answered: "${routerResponse}"\nGenerate 3 follow-up questions.`,
-      true
-    );
+  // Everything past this point streams newline-delimited JSON events so the
+  // client can render the board members' (and judge's) text as it's
+  // generated, and show real phase progress instead of guessed timers:
+  // {"t":"answer","v":"..."} | {"t":"phase","v":"scraping"|"board"|"judge",hasWebsite?} |
+  // {"t":"agent","agent":"believer"|"skeptic"|"investor","v":"..."} | {"t":"judge","v":"..."} |
+  // {"t":"done",creditsUsed,suggestedQuestions,websiteContext?} | {"t":"error","v":"..."}
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (event: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
+      };
 
-    return NextResponse.json({
-      type: "answer",
-      reply: routerResponse,
-      suggestedQuestions,
-      creditsUsed: 1,
-    });
-  }
+      try {
+        // ── GENERAL ANSWER PATH ───────────────────────────────────────────
+        if (routerResponse !== "EVALUATE") {
+          send({ t: "answer", v: routerResponse });
+          const suggestedQuestions = await generateSuggestedQuestions(
+            `User asked: "${startupIdea}"\nAssistant answered: "${routerResponse}"\nGenerate 3 follow-up questions.`,
+            true
+          );
+          send({ t: "done", creditsUsed: 1, suggestedQuestions });
+          return;
+        }
 
-  // ── STEP 2: Fetch Website Context (optional) ──────────────────────────────
-  let websiteContext = "";
-  let hasWebsite = false;
-  if (websiteUrl) {
-    websiteContext = await fetchWebsiteText(websiteUrl);
-    hasWebsite = !!websiteContext;
-  }
+        // ── STEP 2: Fetch Website Context (optional) ────────────────────
+        let websiteContext = "";
+        let hasWebsite = false;
+        if (websiteUrl) {
+          send({ t: "phase", v: "scraping" });
+          websiteContext = await fetchWebsiteText(websiteUrl);
+          hasWebsite = !!websiteContext;
+        }
 
-  const ideaContext = hasWebsite
-    ? `Business Idea: ${startupIdea}\n\nWebsite Content (${websiteUrl}):\n${websiteContext}`
-    : startupIdea;
+        const ideaContext = hasWebsite
+          ? `Business Idea: ${startupIdea}\n\nWebsite Content (${websiteUrl}):\n${websiteContext}`
+          : startupIdea;
 
-  // ── STEP 3: Parallel Boardroom (3 agents simultaneously) ─────────────────
-  let believerOutput: string;
-  let skepticOutput: string;
-  let investorOutput: string;
+        send({ t: "phase", v: "board", hasWebsite });
 
-  try {
-    [believerOutput, skepticOutput, investorOutput] = await Promise.all([
-      getModel(BELIEVER_INSTRUCTION)
-        .generateContent(ideaContext)
-        .then((r) => r.response.text().trim()),
-      getModel(SKEPTIC_INSTRUCTION)
-        .generateContent(ideaContext)
-        .then((r) => r.response.text().trim()),
-      getModel(INVESTOR_INSTRUCTION)
-        .generateContent(ideaContext)
-        .then((r) => r.response.text().trim()),
-    ]);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json(
-      { error: `Board agents failed: ${msg}` },
-      { status: 500 }
-    );
-  }
+        // ── STEP 3: Parallel Boardroom (3 agents streaming simultaneously) ─
+        async function streamAgent(
+          agent: "believer" | "skeptic" | "investor",
+          instruction: string
+        ): Promise<string> {
+          const result = await getModel(instruction).generateContentStream(ideaContext);
+          let full = "";
+          for await (const chunk of result.stream) {
+            const text = chunk.text();
+            if (!text) continue;
+            full += text;
+            send({ t: "agent", agent, v: text });
+          }
+          return full.trim();
+        }
 
-  // ── STEP 4: Judge (Synthesizer) ───────────────────────────────────────────
-  const judgePrompt = `
+        let believerOutput: string, skepticOutput: string, investorOutput: string;
+        try {
+          [believerOutput, skepticOutput, investorOutput] = await Promise.all([
+            streamAgent("believer", BELIEVER_INSTRUCTION),
+            streamAgent("skeptic", SKEPTIC_INSTRUCTION),
+            streamAgent("investor", INVESTOR_INSTRUCTION),
+          ]);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Unknown error";
+          send({ t: "error", v: `Board agents failed: ${msg}` });
+          return;
+        }
+
+        // ── STEP 4: Judge (Synthesizer, streamed) ────────────────────────
+        send({ t: "phase", v: "judge" });
+
+        const judgePrompt = `
 ## The Business Idea
 ${startupIdea}
 ${hasWebsite ? `\n## Website Context (${websiteUrl})\n${websiteContext.slice(0, 1500)}` : ""}
@@ -291,68 +312,76 @@ ${skepticOutput}
 ${investorOutput}
 `.trim();
 
-  let judgeOutput: string;
-  try {
-    const judgeModel = getModel(JUDGE_INSTRUCTION);
-    const judgeResult = await judgeModel.generateContent(judgePrompt);
-    judgeOutput = judgeResult.response.text().trim();
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json(
-      { error: `Judge agent failed: ${msg}` },
-      { status: 500 }
-    );
-  }
+        let judgeOutput = "";
+        try {
+          const judgeResult = await getModel(JUDGE_INSTRUCTION).generateContentStream(judgePrompt);
+          for await (const chunk of judgeResult.stream) {
+            const text = chunk.text();
+            if (!text) continue;
+            judgeOutput += text;
+            send({ t: "judge", v: text });
+          }
+          judgeOutput = judgeOutput.trim();
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Unknown error";
+          send({ t: "error", v: `Judge agent failed: ${msg}` });
+          return;
+        }
 
-  // ── STEP 5: Save to Supabase Chats Table ──────────────────────────────────
-  const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-    process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-  );
+        // ── STEP 5: Save to Supabase Chats Table ─────────────────────────
+        const supabaseAdmin = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+          process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+        );
 
-  const { error: dbError } = await supabaseAdmin.from("chats").insert({
-    user_id: userId,
-    startup_idea: startupIdea,
-    believer_response: believerOutput,
-    skeptic_response: skepticOutput,
-    investor_response: investorOutput,
-    judge_verdict: judgeOutput,
-  });
+        const { error: dbError } = await supabaseAdmin.from("chats").insert({
+          user_id: userId,
+          startup_idea: startupIdea,
+          believer_response: believerOutput,
+          skeptic_response: skepticOutput,
+          investor_response: investorOutput,
+          judge_verdict: judgeOutput,
+        });
 
-  if (dbError) {
-    console.error("Failed to insert chat into Supabase:", dbError);
-    // Continue execution so user still gets their answer even if logging fails
-  }
+        if (dbError) {
+          console.error("Failed to insert chat into Supabase:", dbError);
+          // Continue execution so user still gets their answer even if logging fails
+        }
 
-  // ── STEP 6: Suggested Questions (async, non-blocking to the client) ───────
-  const suggestPrompt = `
+        // ── STEP 6: Suggested Questions ───────────────────────────────────
+        const suggestPrompt = `
 Business Idea: "${startupIdea}"
 ${hasWebsite ? `Website: ${websiteUrl}` : ""}
 Judge's Verdict: "${judgeOutput.slice(0, 800)}"
 Generate 3 follow-up questions for the founder.
 `.trim();
 
-  const suggestedQuestions = await generateSuggestedQuestions(
-    suggestPrompt,
-    false
-  );
+        const suggestedQuestions = await generateSuggestedQuestions(
+          suggestPrompt,
+          false
+        );
 
-  // ── STEP 7: Dynamic Credit Calculation ───────────────────────────────────
-  const creditsUsed = calculateCredits(
-    "boardroom",
-    [believerOutput, skepticOutput, investorOutput, judgeOutput],
-    hasWebsite
-  );
+        // ── STEP 7: Dynamic Credit Calculation ────────────────────────────
+        const creditsUsed = calculateCredits(
+          "boardroom",
+          [believerOutput, skepticOutput, investorOutput, judgeOutput],
+          hasWebsite
+        );
 
-  // ── Return All 4 Voices ───────────────────────────────────────────────────
-  return NextResponse.json({
-    type: "boardroom",
-    believer: believerOutput,
-    skeptic: skepticOutput,
-    investor: investorOutput,
-    judge: judgeOutput,
-    suggestedQuestions,
-    creditsUsed,
-    websiteContext: hasWebsite,
+        send({ t: "done", creditsUsed, suggestedQuestions, websiteContext: hasWebsite });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error.";
+        send({ t: "error", v: message });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-cache",
+    },
   });
 }

@@ -644,10 +644,16 @@ function BoardroomContent() {
     setLoadingStage("routing");
     setActiveResult(null);
 
-    // Simulate stage progression
-    const stageTimer1 = setTimeout(() => setLoadingStage("scraping"), 1200);
-    const stageTimer2 = setTimeout(() => setLoadingStage("board"), websiteUrl ? 3000 : 2000);
-    const stageTimer3 = setTimeout(() => setLoadingStage("judge"), websiteUrl ? 8000 : 6000);
+    // Accumulators driven by real server signals (not guessed timers) so the
+    // board members' text grows live on screen as each agent actually
+    // generates it, instead of popping in all at once at the end.
+    let believerText = "", skepticText = "", investorText = "", judgeText = "";
+    let answerText = "";
+    let resultType: "boardroom" | "answer" | null = null;
+    let hasWebsiteFlag = false;
+    let finalCreditsUsed = 0;
+    let finalSuggested: string[] = [];
+    let streamError = "";
 
     try {
       const res = await fetch("/api/boardroom", {
@@ -655,26 +661,100 @@ function BoardroomContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           startup_idea: text,
-          user_id: session?.user?.id || "",
           website_url: websiteUrl || undefined,
         }),
       });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error ?? "Request failed.");
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Request failed.");
+      }
+      if (!res.body) throw new Error("Streaming isn't supported by this browser.");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let evt: { t: string; v?: string; agent?: string; hasWebsite?: boolean; creditsUsed?: number; suggestedQuestions?: string[]; websiteContext?: boolean };
+          try { evt = JSON.parse(line); } catch { continue; }
+
+          if (evt.t === "error") {
+            streamError = evt.v ?? "Request failed.";
+          } else if (evt.t === "answer") {
+            resultType = "answer";
+            answerText = evt.v ?? "";
+            setIsLoading(false);
+            setActiveResult({ type: "answer", reply: answerText, suggestedQuestions: [], creditsUsed: 1 });
+          } else if (evt.t === "phase") {
+            if (evt.v === "board") {
+              resultType = "boardroom";
+              hasWebsiteFlag = !!evt.hasWebsite;
+              setIsLoading(false);
+              setActiveResult({
+                type: "boardroom", believer: "", skeptic: "", investor: "", judge: "",
+                suggestedQuestions: [], creditsUsed: 0, websiteContext: hasWebsiteFlag,
+              });
+            } else {
+              setLoadingStage(evt.v as string);
+            }
+          } else if (evt.t === "agent") {
+            if (evt.agent === "believer") believerText += evt.v ?? "";
+            else if (evt.agent === "skeptic") skepticText += evt.v ?? "";
+            else if (evt.agent === "investor") investorText += evt.v ?? "";
+            setActiveResult(prev =>
+              prev && prev.type === "boardroom"
+                ? { ...prev, believer: believerText, skeptic: skepticText, investor: investorText }
+                : prev
+            );
+          } else if (evt.t === "judge") {
+            judgeText += evt.v ?? "";
+            setActiveResult(prev =>
+              prev && prev.type === "boardroom" ? { ...prev, judge: judgeText } : prev
+            );
+          } else if (evt.t === "done") {
+            finalCreditsUsed = evt.creditsUsed ?? (resultType === "answer" ? 1 : 0);
+            finalSuggested = evt.suggestedQuestions ?? [];
+            if (resultType === "boardroom" && evt.websiteContext !== undefined) {
+              hasWebsiteFlag = evt.websiteContext;
+            }
+          }
+        }
+      }
+
+      if (streamError) throw new Error(streamError);
+      if (!resultType) throw new Error("AI returned an empty response.");
+
+      const finalResult: SessionResult =
+        resultType === "boardroom"
+          ? {
+              type: "boardroom", believer: believerText, skeptic: skepticText,
+              investor: investorText, judge: judgeText, suggestedQuestions: finalSuggested,
+              creditsUsed: finalCreditsUsed, websiteContext: hasWebsiteFlag,
+            }
+          : { type: "answer", reply: answerText, suggestedQuestions: finalSuggested, creditsUsed: finalCreditsUsed };
+
+      setActiveResult(finalResult);
+      setActiveInput(text);
 
       // Deduct credits
-      const newTokens = Math.max(0, creditState!.tokens - data.creditsUsed);
+      const newTokens = Math.max(0, creditState!.tokens - finalResult.creditsUsed);
       const newState = { ...creditState!, tokens: newTokens };
       setCreditState(newState);
       saveCreditState(newState);
 
-      setActiveResult(data as SessionResult);
-      setActiveInput(text);
-
       // Save to history
       const sid = `board_${Date.now()}`;
       setActiveSessionId(sid);
-      saveSession(sid, text, websiteUrl, data as SessionResult, tier);
+      saveSession(sid, text, websiteUrl, finalResult, tier);
       setInput("");
 
       // Show paywall AFTER result renders if credits are now depleted
@@ -682,11 +762,9 @@ function BoardroomContent() {
         setTimeout(() => setShowPaywall(true), 1800);
       }
     } catch (err) {
+      setActiveResult(null);
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
-      clearTimeout(stageTimer1);
-      clearTimeout(stageTimer2);
-      clearTimeout(stageTimer3);
       setIsLoading(false);
     }
   }

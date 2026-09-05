@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
+import Razorpay from "razorpay";
 import { createClient } from "@supabase/supabase-js";
 import { auth } from "@/auth";
-
-const TIER_DAYS = 30;
 
 type VerifyBody = {
   razorpay_order_id?: unknown;
   razorpay_payment_id?: unknown;
   razorpay_signature?: unknown;
-  tier?: unknown;
 };
 
 export async function POST(request: Request) {
@@ -28,14 +26,14 @@ export async function POST(request: Request) {
   const orderId = typeof body.razorpay_order_id === "string" ? body.razorpay_order_id : "";
   const paymentId = typeof body.razorpay_payment_id === "string" ? body.razorpay_payment_id : "";
   const signature = typeof body.razorpay_signature === "string" ? body.razorpay_signature : "";
-  const tier = body.tier === "pro" ? "pro" : body.tier === "basic" ? "basic" : "";
 
-  if (!orderId || !paymentId || !signature || !tier) {
+  if (!orderId || !paymentId || !signature) {
     return NextResponse.json({ error: "Missing payment details." }, { status: 400 });
   }
 
+  const keyId = process.env.RAZORPAY_KEY_ID;
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
-  if (!keySecret) {
+  if (!keyId || !keySecret) {
     return NextResponse.json({ error: "Payments are not configured." }, { status: 500 });
   }
 
@@ -50,6 +48,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Payment verification failed." }, { status: 400 });
   }
 
+  // Tier/billing come from the order Razorpay has on file (set server-side
+  // at create-order time), never from the client — otherwise a tampered
+  // request could claim "annual" after only paying the monthly amount.
+  const razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
+  const order = await razorpay.orders.fetch(orderId);
+  const notes = order.notes || {};
+  const tier = notes.tier === "pro" ? "pro" : notes.tier === "basic" ? "basic" : "";
+  const billing = notes.billing === "annual" ? "annual" : "monthly";
+  if (!tier || order.status !== "paid") {
+    return NextResponse.json({ error: "Payment not completed." }, { status: 400 });
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceRoleKey) {
@@ -60,7 +70,8 @@ export async function POST(request: Request) {
   }
 
   const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
-  const expiresAt = new Date(Date.now() + TIER_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const days = billing === "annual" ? 365 : 30;
+  const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 
   const { error } = await supabaseAdmin.from("profiles").upsert({
     id: session.user.id,

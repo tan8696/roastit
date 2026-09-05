@@ -3,8 +3,8 @@ import Razorpay from "razorpay";
 import { auth } from "@/auth";
 
 // Placeholder INR pricing (rough $15 / $50 conversion, rounded) — confirm
-// and adjust these before taking real payments.
-const TIER_AMOUNTS_PAISE: Record<string, number> = {
+// and adjust these before taking real payments. Annual = 10x monthly (2 months free).
+const MONTHLY_PAISE: Record<string, number> = {
   basic: 129900, // ~₹1,299
   pro: 419900, // ~₹4,199
 };
@@ -15,18 +15,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  let body: { tier?: unknown };
+  let body: { tier?: unknown; billing?: unknown };
   try {
-    body = (await request.json()) as { tier?: unknown };
+    body = (await request.json()) as { tier?: unknown; billing?: unknown };
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
   const tier = typeof body.tier === "string" ? body.tier : "";
-  const amount = TIER_AMOUNTS_PAISE[tier];
-  if (!amount) {
+  const billing = body.billing === "annual" ? "annual" : "monthly";
+  const monthly = MONTHLY_PAISE[tier];
+  if (!monthly) {
     return NextResponse.json({ error: "Unknown plan." }, { status: 400 });
   }
+  const amount = billing === "annual" ? monthly * 10 : monthly;
 
   const keyId = process.env.RAZORPAY_KEY_ID;
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
@@ -44,7 +46,7 @@ export async function POST(request: Request) {
       amount,
       currency: "INR",
       receipt: `${session.user.id}-${tier}-${Date.now()}`.slice(0, 40),
-      notes: { userId: session.user.id, tier },
+      notes: { userId: session.user.id, tier, billing },
     });
 
     return NextResponse.json({

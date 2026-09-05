@@ -16,9 +16,10 @@ declare global {
 
 // Mirrors app/api/razorpay/create-order/route.ts — for display only,
 // the server is the source of truth for what's actually charged.
-const TIER_PRICE_INR: Record<string, string> = {
-  basic: "₹1,299",
-  pro: "₹4,199",
+// Annual = 10x monthly (2 months free).
+const TIER_PRICE_INR: Record<string, { monthly: string; annual: string }> = {
+  basic: { monthly: "₹1,299", annual: "₹12,990" },
+  pro: { monthly: "₹4,199", annual: "₹41,990" },
 };
 
 function loadRazorpayScript(): Promise<boolean> {
@@ -67,8 +68,8 @@ const TIERS = [
     disabled: false,
     description: "Answers & solutions for your business questions, with a focused scope.",
     features: [
-      "100 tokens / day (resets midnight)",
-      "10 tokens per message (~10 msg/day)",
+      "~10 full teardowns a day",
+      "Resets every midnight",
       "Full UX teardown reports",
       "Conversion killer analysis",
       "Headline + CTA rewrites",
@@ -89,8 +90,8 @@ const TIERS = [
     disabled: false,
     description: "Complete access — full business intelligence, ~100 messages per day.",
     features: [
-      "500 tokens / day (resets midnight)",
-      "5 tokens per message (~100 msg/day)",
+      "~100 full teardowns a day",
+      "Resets every midnight",
       "Full business strategy chat",
       "Competitive & funnel analysis",
       "Copy rewrites (any section)",
@@ -109,6 +110,7 @@ function PaywallContent() {
   const { data: session, status } = useSession();
   const [payingTier, setPayingTier] = useState<string | null>(null);
   const [payError, setPayError] = useState("");
+  const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -128,7 +130,7 @@ function PaywallContent() {
       const orderRes = await fetch("/api/razorpay/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tier: tierId }),
+        body: JSON.stringify({ tier: tierId, billing }),
       });
       const order = await orderRes.json();
       if (!orderRes.ok) {
@@ -150,7 +152,7 @@ function PaywallContent() {
         currency: order.currency,
         order_id: order.orderId,
         name: "Brutal Roaster",
-        description: `${tierId === "pro" ? "Pro" : "Starter"} plan — 30 days`,
+        description: `${tierId === "pro" ? "Pro" : "Starter"} plan — ${billing === "annual" ? "12 months" : "30 days"}`,
         prefill: {
           name: session.user.name || undefined,
           email: session.user.email || undefined,
@@ -165,7 +167,7 @@ function PaywallContent() {
             const verifyRes = await fetch("/api/razorpay/verify", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ ...response, tier: tierId }),
+              body: JSON.stringify(response),
             });
             const verifyData = await verifyRes.json();
             if (!verifyRes.ok || !verifyData.success) {
@@ -279,6 +281,22 @@ function PaywallContent() {
               {payError}
             </p>
           )}
+
+          {/* Billing toggle */}
+          <div className="inline-flex items-center gap-1 mt-6 p-1 rounded-full border border-white/10 bg-white/5">
+            <button
+              onClick={() => setBilling("monthly")}
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${billing === "monthly" ? "bg-white text-black" : "text-white/50 hover:text-white"}`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setBilling("annual")}
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${billing === "annual" ? "bg-white text-black" : "text-white/50 hover:text-white"}`}
+            >
+              Annual — 2 months free
+            </button>
+          </div>
         </div>
 
         {/* Pricing cards */}
@@ -316,8 +334,10 @@ function PaywallContent() {
                 <div className="flex items-baseline gap-1">
                   {tier.price ? (
                     <>
-                      <span className="text-4xl font-black text-white">${tier.price}</span>
-                      <span className="text-white/35 text-sm">/month</span>
+                      <span className="text-4xl font-black text-white">
+                        ${billing === "annual" ? tier.price * 10 : tier.price}
+                      </span>
+                      <span className="text-white/35 text-sm">{billing === "annual" ? "/year" : "/month"}</span>
                     </>
                   ) : (
                     <span className="text-4xl font-black text-white/40">Free</span>
@@ -325,7 +345,7 @@ function PaywallContent() {
                 </div>
                 {TIER_PRICE_INR[tier.id] && (
                   <p className="text-white/30 text-[11px] mt-1">
-                    Charged as {TIER_PRICE_INR[tier.id]} — 30 days
+                    Charged as {TIER_PRICE_INR[tier.id][billing]} — {billing === "annual" ? "12 months" : "30 days"}
                   </p>
                 )}
                 <p className="text-white/40 text-xs mt-2 leading-relaxed">{tier.description}</p>

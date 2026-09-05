@@ -509,6 +509,7 @@ function ChatContent() {
   }
 
   const depleted = tokenState ? tokenState.tokens < config.costPerMessage : false;
+  const lowTokens = tokenState ? !depleted && tokenState.tokens < tokenState.dailyLimit * 0.25 : false;
   const userName = session?.user?.name ?? "User";
   const avatarUrl = session?.user?.image;
   const grouped = groupByDate(history);
@@ -696,6 +697,18 @@ function ChatContent() {
             <p className="text-xs text-red-300 flex-1">{error}</p>
             <button onClick={() => setError("")} className="text-red-400/50 hover:text-red-400 cursor-pointer shrink-0">
               <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" /></svg>
+            </button>
+          </div>
+        )}
+
+        {/* Low tokens nudge — fires before depletion, not after */}
+        {lowTokens && tier === "basic" && (
+          <div className="mx-4 mb-2 px-4 py-3 rounded-xl bg-white/3 border border-white/10 text-center">
+            <p className="text-xs text-white/50 mb-2">
+              ⚡ {Math.floor(tokenState!.tokens / config.costPerMessage)} messages left today. Pro gives you 5x more.
+            </p>
+            <button onClick={() => router.push("/paywall")} className="text-xs font-semibold text-white underline underline-offset-2 hover:no-underline cursor-pointer">
+              Upgrade to Pro →
             </button>
           </div>
         )}

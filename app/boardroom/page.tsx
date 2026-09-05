@@ -13,8 +13,32 @@ import { useSession, signOut } from "next-auth/react";
 import dynamic from "next/dynamic";
 import Markdown from "react-markdown";
 import AdBanner from "@/components/AdBanner";
+import { Skeleton } from "@/components/Skeleton";
 
 const Scanner = dynamic(() => import("@/components/Scanner"), { ssr: false });
+
+function BoardroomSkeleton() {
+  return (
+    <div className="relative flex h-screen bg-black overflow-hidden">
+      <aside className="hidden md:flex flex-col w-72 border-r border-white/8 shrink-0 p-4 gap-3">
+        <Skeleton className="h-6 w-24 mb-2" />
+        <Skeleton className="h-16 w-full rounded-xl" />
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <div className="flex flex-col gap-2 mt-2">
+          <Skeleton className="h-8 w-full rounded-lg" />
+          <Skeleton className="h-8 w-3/4 rounded-lg" />
+        </div>
+      </aside>
+      <div className="flex flex-col flex-1 min-w-0 items-center px-4 py-16">
+        <Skeleton className="h-7 w-64 rounded-full mb-6" />
+        <Skeleton className="h-10 w-80 mb-4" />
+        <Skeleton className="h-4 w-full max-w-lg mb-2" />
+        <Skeleton className="h-4 w-3/4 max-w-lg mb-8" />
+        <Skeleton className="h-28 w-full max-w-2xl rounded-2xl" />
+      </div>
+    </div>
+  );
+}
 
 // ─── Credit System (mirrors /chat/page.tsx) ────────────────────────────────
 const TIER_CONFIG = {
@@ -710,11 +734,7 @@ function BoardroomContent() {
   const grouped = groupByDate(history);
 
   if (status === "loading" || (!authed && status !== "authenticated")) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-black">
-        <div className="w-8 h-8 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-      </div>
-    );
+    return <BoardroomSkeleton />;
   }
 
   return (
@@ -1225,13 +1245,7 @@ function BoardroomContent() {
 
 export default function BoardroomPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex items-center justify-center min-h-screen bg-black">
-          <div className="w-8 h-8 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-        </div>
-      }
-    >
+    <Suspense fallback={<BoardroomSkeleton />}>
       <BoardroomContent />
     </Suspense>
   );

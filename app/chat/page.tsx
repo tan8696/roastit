@@ -5,8 +5,38 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import dynamic from "next/dynamic";
 import Markdown from "react-markdown";
+import { Skeleton } from "@/components/Skeleton";
 
 const Scanner = dynamic(() => import("@/components/Scanner"), { ssr: false });
+
+function ChatSkeleton() {
+  return (
+    <div className="relative flex h-screen bg-black overflow-hidden">
+      <aside className="hidden md:flex flex-col w-72 border-r border-white/8 shrink-0 p-4 gap-3">
+        <Skeleton className="h-6 w-24 mb-2" />
+        <Skeleton className="h-16 w-full rounded-xl" />
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <div className="flex flex-col gap-2 mt-2">
+          <Skeleton className="h-8 w-full rounded-lg" />
+          <Skeleton className="h-8 w-full rounded-lg" />
+          <Skeleton className="h-8 w-3/4 rounded-lg" />
+        </div>
+      </aside>
+      <div className="flex flex-col flex-1 min-w-0">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/8 shrink-0">
+          <Skeleton className="h-5 w-32" />
+        </div>
+        <div className="flex-1 px-4 py-6">
+          <div className="max-w-3xl mx-auto flex flex-col gap-4">
+            <Skeleton className="h-20 w-2/3 rounded-2xl" />
+            <Skeleton className="h-14 w-1/2 rounded-2xl self-end" />
+            <Skeleton className="h-24 w-3/4 rounded-2xl" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Token System ────────────────────────────────────────────────────────────
 const TIER_CONFIG = {
@@ -515,11 +545,7 @@ function ChatContent() {
   const grouped = groupByDate(history);
 
   if (status === "loading" || (!authed && status !== "authenticated")) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-black">
-        <div className="w-8 h-8 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-      </div>
-    );
+    return <ChatSkeleton />;
   }
 
   return (
@@ -778,11 +804,7 @@ function ChatContent() {
 
 export default function ChatPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center min-h-screen bg-black">
-        <div className="w-8 h-8 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-      </div>
-    }>
+    <Suspense fallback={<ChatSkeleton />}>
       <ChatContent />
     </Suspense>
   );

@@ -5,8 +5,32 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Suspense } from "react";
 import { useSession } from "next-auth/react";
+import { Skeleton } from "@/components/Skeleton";
 
 const Scanner = dynamic(() => import("@/components/Scanner"), { ssr: false });
+
+function PaywallSkeleton() {
+  return (
+    <div className="relative min-h-screen bg-black overflow-hidden">
+      <div className="relative z-10 max-w-5xl mx-auto px-5 pt-16 pb-24">
+        <nav className="flex items-center justify-between mb-12">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-4 w-20" />
+        </nav>
+        <div className="flex flex-col items-center mb-12">
+          <Skeleton className="h-7 w-48 rounded-full mb-6" />
+          <Skeleton className="h-10 w-64 mb-4" />
+          <Skeleton className="h-4 w-80" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <Skeleton className="h-96 rounded-2xl" />
+          <Skeleton className="h-96 rounded-2xl" />
+          <Skeleton className="h-96 rounded-2xl" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 declare global {
   interface Window {
@@ -193,11 +217,7 @@ function PaywallContent() {
   }
 
   if (status === "loading") {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-black">
-        <div className="w-8 h-8 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-      </div>
-    );
+    return <PaywallSkeleton />;
   }
 
   return (
@@ -400,11 +420,7 @@ function PaywallContent() {
 
 export default function PaywallPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center min-h-screen bg-black">
-        <div className="w-8 h-8 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-      </div>
-    }>
+    <Suspense fallback={<PaywallSkeleton />}>
       <PaywallContent />
     </Suspense>
   );

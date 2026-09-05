@@ -67,3 +67,18 @@ input:focus {
   outline: none;
   box-shadow: 0 0 0 2px rgba(255,255,255,0.15), 0 0 20px 0px rgba(255,255,255,0.05);
 }
+
+/* Click animation for every button (and explicit button-role elements) —
+   a single global rule so new buttons get it automatically. Tailwind v4's
+   utilities live in `@layer utilities`, and unlayered CSS always beats
+   layered CSS regardless of specificity — so this has to join that same
+   layer, wrapped in :where() for zero specificity within it, or it would
+   silently clobber every component's own transition-all/active:scale-*. */
+@layer utilities {
+  :where(button:not(:disabled), [role="button"]:not([aria-disabled="true"])) {
+    transition: transform 0.15s ease;
+  }
+  :where(button:not(:disabled):active, [role="button"]:not([aria-disabled="true"]):active) {
+    transform: scale(0.96);
+  }
+}

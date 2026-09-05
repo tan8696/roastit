@@ -4,8 +4,37 @@ import { useEffect, useState, useRef, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import dynamic from "next/dynamic";
+import { Skeleton } from "@/components/Skeleton";
 
 const Scanner = dynamic(() => import("@/components/Scanner"), { ssr: false });
+
+function DashboardSkeleton() {
+  return (
+    <div className="relative min-h-screen bg-black overflow-hidden">
+      <div className="relative z-10 max-w-3xl mx-auto px-5 pt-20 pb-24">
+        <nav className="flex items-center justify-between mb-20">
+          <Skeleton className="h-6 w-24" />
+          <Skeleton className="h-8 w-28 rounded-full" />
+        </nav>
+        <div className="mb-12">
+          <Skeleton className="h-7 w-56 rounded-full mb-6" />
+          <Skeleton className="h-11 w-full max-w-md mb-3" />
+          <Skeleton className="h-11 w-72 mb-5" />
+          <Skeleton className="h-4 w-full max-w-xl mb-2" />
+          <Skeleton className="h-4 w-3/4 max-w-xl mb-8" />
+          <Skeleton className="h-11 w-64 rounded-full" />
+        </div>
+        <Skeleton className="h-24 w-full rounded-2xl mb-12" />
+        <Skeleton className="h-28 w-full rounded-2xl mb-6" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Skeleton className="h-32 rounded-xl" />
+          <Skeleton className="h-32 rounded-xl" />
+          <Skeleton className="h-32 rounded-xl" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Feedback Modal ──────────────────────────────────────────────────────────
 const CATEGORIES = [
@@ -388,11 +417,7 @@ export default function DashboardHome() {
   }
 
   if (status === "loading") {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-black">
-        <div className="w-8 h-8 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   const userName = session?.user?.name ?? "User";

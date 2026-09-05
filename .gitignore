@@ -5,3 +5,6 @@ node_modules
 .env*.local
 *.env
 *.log
+graphify-out
+.agents
+skills-lock.json

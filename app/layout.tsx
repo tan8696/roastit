@@ -19,7 +19,7 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://brutal-roaster.vercel.app";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://roastitai.vercel.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

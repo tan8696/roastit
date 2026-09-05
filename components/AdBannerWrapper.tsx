@@ -3,11 +3,14 @@
 import { usePathname } from "next/navigation";
 import AdBanner from "@/components/AdBanner";
 
-// Chat and Boardroom use a fixed h-screen layout with their message
-// composer pinned to the bottom — a global fixed ad bar there overlaps
-// the input box. Login has no content worth monetizing. Keep ads only
-// on pages with normal scrolling layouts and bottom padding reserved.
-const ADS_DISABLED_ON = ["/login", "/chat", "/boardroom"];
+// Allowlist, not a denylist: AdSense rejected the site for "Google-served
+// ads on screens without publisher content" — a denylist of known-thin
+// routes (login, paywall, a 404) can never be complete, since a 404 can
+// happen at any unpredictable URL and still renders inside this same root
+// layout. Only pages confirmed to carry real, substantial content get ads;
+// everything else (login, chat, boardroom, paywall, 404s, any future route
+// we forget to update) safely defaults to no ad.
+const ADS_ENABLED_ON = ["/", "/about", "/contact", "/privacy", "/terms"];
 
 export default function AdBannerWrapper({ isPro }: { isPro: boolean }) {
   const pathname = usePathname();
@@ -16,7 +19,7 @@ export default function AdBannerWrapper({ isPro }: { isPro: boolean }) {
   const isConfigured = Boolean(clientId && slotId);
 
   if (isPro || !isConfigured) return null;
-  if (ADS_DISABLED_ON.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return null;
+  if (!ADS_ENABLED_ON.includes(pathname)) return null;
 
   return (
     <div className="fixed bottom-0 w-full z-50 bg-black/80 backdrop-blur-md border-t border-white/10">

@@ -68,6 +68,19 @@ input:focus {
   box-shadow: 0 0 0 2px rgba(255,255,255,0.15), 0 0 20px 0px rgba(255,255,255,0.05);
 }
 
+/* iOS Safari auto-zooms the whole page on focus for any input/textarea
+   with font-size under 16px — every field in this app uses Tailwind's
+   text-sm (14px). Deliberately left OUTSIDE @layer (unlike the button
+   rule above): unlayered CSS beats Tailwind's layered utilities
+   regardless of specificity, which here is exactly what's needed to
+   override text-sm's font-size on mobile without touching every field's
+   className individually. Desktop is untouched by the media query. */
+@media (max-width: 767px) {
+  input, textarea, select {
+    font-size: 16px;
+  }
+}
+
 /* Click animation for every button (and explicit button-role elements) —
    a single global rule so new buttons get it automatically. Tailwind v4's
    utilities live in `@layer utilities`, and unlayered CSS always beats

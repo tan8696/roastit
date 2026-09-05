@@ -309,8 +309,31 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {/* Consent notice */}
+        {mode === "signup" && (
+          <p className="mt-5 text-center text-[11px] text-white/20 max-w-xs">
+            By creating an account, you agree to our{" "}
+            <a href="/terms" className="underline underline-offset-2 hover:text-white/40">
+              Terms of Use
+            </a>{" "}
+            and{" "}
+            <button
+              type="button"
+              onClick={() => setShowPrivacy(true)}
+              className="underline underline-offset-2 hover:text-white/40 cursor-pointer"
+            >
+              Privacy Policy
+            </button>
+            .
+          </p>
+        )}
+
         {/* Footer links */}
         <div className="mt-6 flex flex-wrap items-center justify-center gap-4 text-xs text-white/20">
+          <a href="/terms" className="hover:text-white/50 transition-colors underline underline-offset-2">
+            Terms of Use
+          </a>
+          <span>·</span>
           <button
             onClick={() => setShowPrivacy(true)}
             className="hover:text-white/50 transition-colors cursor-pointer underline underline-offset-2"

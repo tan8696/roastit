@@ -629,9 +629,13 @@ export default function DashboardHome() {
         {/* Footer */}
         <footer className="mt-20 pt-8 border-t border-white/8 flex flex-wrap items-center justify-between gap-4 text-xs text-white/20">
           <span>© 2025 Brutal Roaster</span>
-          <a href="mailto:rosterai@gmail.com" className="hover:text-white/50 transition-colors">
-            rosterai@gmail.com
-          </a>
+          <div className="flex items-center gap-4">
+            <a href="/terms" className="hover:text-white/50 transition-colors">Terms</a>
+            <a href="/privacy" className="hover:text-white/50 transition-colors">Privacy</a>
+            <a href="mailto:rosterai@gmail.com" className="hover:text-white/50 transition-colors">
+              rosterai@gmail.com
+            </a>
+          </div>
         </footer>
       </div>
     </div>

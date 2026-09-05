@@ -180,6 +180,7 @@ export default function MarketingHome() {
           <span>© 2025 Brutal Roaster</span>
           <div className="flex items-center gap-4">
             <Link href="/about" className="hover:text-white/50 transition-colors">About</Link>
+            <Link href="/terms" className="hover:text-white/50 transition-colors">Terms</Link>
             <Link href="/privacy" className="hover:text-white/50 transition-colors">Privacy</Link>
             <Link href="/contact" className="hover:text-white/50 transition-colors">Contact</Link>
           </div>

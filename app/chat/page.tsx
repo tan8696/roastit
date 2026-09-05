@@ -462,38 +462,93 @@ function ChatContent() {
       .filter(m => m.id !== "welcome" && !m.id.startsWith("welcome"))
       .map(m => ({ role: m.role, content: m.content }));
 
+    const aiMsgId = (Date.now() + 1).toString();
+    let replyText = "";
+    let thoughtsText = "";
+    let sawReplyText = false;
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: apiMessages, tier }),
       });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error ?? "Request failed.");
 
-      const aiMsg: Message = {
-        id: (Date.now() + 1).toString(), role: "assistant",
-        content: data.reply, timestamp: new Date().toISOString(),
-      };
-      const finalMessages = [...updatedMessages, aiMsg];
-
-      // ── Thinking panel state machine ──────────────────────────────────────
-      if (data.thoughts) {
-        // Phase 1: show real thoughts briefly
-        setThinkingContent(data.thoughts);
-        setThinkingPhase("revealing");
-        setMessages(finalMessages);               // reply visible simultaneously
-        saveCurrentSession(finalMessages, currentSessionId, tier);
-        // Phase 2: fade out after 2 seconds
-        setTimeout(() => setThinkingPhase("gone"), 2000);
-      } else {
-        // No thoughts returned — collapse panel immediately
-        setThinkingPhase("gone");
-        setMessages(finalMessages);
-        saveCurrentSession(finalMessages, currentSessionId, tier);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Request failed.");
       }
+      if (!res.body) throw new Error("Streaming isn't supported by this browser.");
+
+      // Read the NDJSON stream and grow the assistant bubble live as text
+      // arrives, instead of waiting for the whole reply before showing anything.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let streamError = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let evt: { t: string; v: string };
+          try { evt = JSON.parse(line); } catch { continue; }
+
+          if (evt.t === "error") {
+            streamError = evt.v;
+          } else if (evt.t === "thought") {
+            thoughtsText += evt.v;
+            setThinkingContent(thoughtsText);
+          } else if (evt.t === "text") {
+            if (!sawReplyText) {
+              // First real text chunk — collapse the thinking panel (revealing
+              // the captured thoughts briefly first) so the growing reply
+              // bubble becomes the visible "live generating" moment.
+              sawReplyText = true;
+              if (thoughtsText.trim()) {
+                setThinkingPhase("revealing");
+                setTimeout(() => setThinkingPhase("gone"), 1200);
+              } else {
+                setThinkingPhase("gone");
+              }
+            }
+            replyText += evt.v;
+            const liveText = replyText;
+            setMessages(prev => {
+              const exists = prev.some(m => m.id === aiMsgId);
+              if (exists) {
+                return prev.map(m => (m.id === aiMsgId ? { ...m, content: liveText } : m));
+              }
+              return [...prev, {
+                id: aiMsgId, role: "assistant", content: liveText,
+                timestamp: new Date().toISOString(),
+              }];
+            });
+          }
+        }
+      }
+
+      if (streamError) throw new Error(streamError);
+      if (!sawReplyText) throw new Error("AI returned an empty response.");
+
+      setThinkingPhase("gone");
+      setMessages(prev => {
+        const finalMessages = prev.map(m =>
+          m.id === aiMsgId ? { ...m, content: replyText.trim() } : m
+        );
+        saveCurrentSession(finalMessages, currentSessionId, tier);
+        return finalMessages;
+      });
     } catch (err) {
       setThinkingPhase("gone");
+      // Drop the partial assistant bubble on failure rather than leaving a
+      // half-written message with no way to retry it.
+      setMessages(prev => prev.filter(m => m.id !== aiMsgId));
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setIsTyping(false);
@@ -704,11 +759,8 @@ function ChatContent() {
         <div className="flex-1 overflow-y-auto px-4 py-6" style={{ scrollbarWidth: "thin", scrollbarColor: "#222 transparent" }}>
           <div className="max-w-3xl mx-auto">
             {messages.map(msg => <MessageBubble key={msg.id} msg={msg} />)}
-            {(isTyping || thinkingPhase !== "gone") && (
-              <ThinkingPanel
-                phase={isTyping ? "thinking" : thinkingPhase}
-                thoughts={thinkingContent}
-              />
+            {thinkingPhase !== "gone" && (
+              <ThinkingPanel phase={thinkingPhase} thoughts={thinkingContent} />
             )}
             <div ref={messagesEndRef} />
           </div>

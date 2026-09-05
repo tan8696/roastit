@@ -21,6 +21,9 @@ type RequestBody = {
   tier?: string;
 };
 
+// Streams newline-delimited JSON events so the client can render the reply
+// as it's generated instead of waiting for the full response:
+// {"t":"thought","v":"..."} | {"t":"text","v":"..."} | {"t":"error","v":"..."}
 export async function POST(request: Request) {
   // The /chat page redirects unpaid users to /paywall, but that's just
   // client-side routing — without this, anyone could call this endpoint
@@ -51,7 +54,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "messages array is required." }, { status: 400 });
   }
 
-  // Build conversation history for Gemini
   const history = (messages as Message[]).slice(0, -1).map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
@@ -62,53 +64,62 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Last message must be from user." }, { status: 400 });
   }
 
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      systemInstruction: SYSTEM_INSTRUCTION,
-      // Enable Gemini's native thinking mode — exposes chain-of-thought tokens
-      generationConfig: {
-        thinkingConfig: {
-          thinkingBudget: 8192,
-        },
-      } as Record<string, unknown>,
-    });
+  const encoder = new TextEncoder();
 
-    const chat = model.startChat({ history });
-    const result = await chat.sendMessage(lastMessage.content);
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (t: "thought" | "text" | "error", v: string) => {
+        controller.enqueue(encoder.encode(JSON.stringify({ t, v }) + "\n"));
+      };
 
-    // ── Separate thought tokens from the final reply ───────────────────────
-    let thoughts = "";
-    let reply = "";
+      try {
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({
+          model: "gemini-2.5-flash",
+          systemInstruction: SYSTEM_INSTRUCTION,
+          // Enable Gemini's native thinking mode — exposes chain-of-thought tokens
+          generationConfig: {
+            thinkingConfig: {
+              thinkingBudget: 8192,
+            },
+          } as Record<string, unknown>,
+        });
 
-    try {
-      const parts = result.response.candidates?.[0]?.content?.parts ?? [];
-      for (const part of parts) {
-        // Gemini marks chain-of-thought parts with thought: true
-        const p = part as { text?: string; thought?: boolean };
-        if (p.thought && p.text) {
-          thoughts += p.text;
-        } else if (p.text) {
-          reply += p.text;
+        const chat = model.startChat({ history });
+        const result = await chat.sendMessageStream(lastMessage.content);
+
+        let sawReplyText = false;
+        for await (const chunk of result.stream) {
+          const parts = chunk.candidates?.[0]?.content?.parts ?? [];
+          for (const part of parts) {
+            // Gemini marks chain-of-thought parts with thought: true
+            const p = part as { text?: string; thought?: boolean };
+            if (!p.text) continue;
+            if (p.thought) {
+              send("thought", p.text);
+            } else {
+              sawReplyText = true;
+              send("text", p.text);
+            }
+          }
         }
+
+        if (!sawReplyText) {
+          send("error", "AI returned an empty response.");
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error.";
+        send("error", `AI request failed: ${message}`);
+      } finally {
+        controller.close();
       }
-    } catch {
-      // parts parsing failed — fall through to text() helper
-    }
+    },
+  });
 
-    // Fallback if parts extraction yielded nothing
-    if (!reply) reply = result.response.text().trim();
-    reply = reply.trim();
-
-    if (!reply) {
-      return NextResponse.json({ error: "AI returned an empty response." }, { status: 502 });
-    }
-
-    // Return both reply and thoughts; thoughts may be empty if model skips thinking
-    return NextResponse.json({ reply, thoughts: thoughts.trim() });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error.";
-    return NextResponse.json({ error: `AI request failed: ${message}` }, { status: 500 });
-  }
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-cache",
+    },
+  });
 }

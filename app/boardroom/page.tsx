@@ -18,8 +18,8 @@ const Scanner = dynamic(() => import("@/components/Scanner"), { ssr: false });
 
 // ─── Credit System (mirrors /chat/page.tsx) ────────────────────────────────
 const TIER_CONFIG = {
-  basic: { name: "Starter", price: "$15/mo", dailyTokens: 100 },
-  pro: { name: "Pro", price: "$50/mo", dailyTokens: 500 },
+  basic: { name: "Pro", price: "$1/mo", dailyTokens: 100 },
+  pro: { name: "Max", price: "$5/mo", dailyTokens: 500 },
 } as const;
 type Tier = keyof typeof TIER_CONFIG;
 
@@ -381,24 +381,24 @@ function HistoryItem({
 const PAYWALL_TIERS = [
   {
     id: "basic",
-    name: "Starter",
-    price: "$15",
+    name: "Pro",
+    price: "$1",
     badge: "Most Popular",
     badgeStyle: "bg-white text-black",
     description: "100 credits / day · 10 per session",
     features: ["Full boardroom sessions", "Landing page roasts", "Business Q&A", "Email support"],
-    cta: "Get Starter →",
+    cta: "Get Pro →",
     ctaStyle: "bg-white text-black hover:bg-white/90",
   },
   {
     id: "pro",
-    name: "Pro",
-    price: "$50",
+    name: "Max",
+    price: "$5",
     badge: "Best Value",
     badgeStyle: "bg-white/10 text-white border border-white/15",
     description: "500 credits / day · 5 per session",
-    features: ["Everything in Starter", "~100 sessions / day", "Priority support", "Unlimited roasts"],
-    cta: "Go Pro →",
+    features: ["Everything in Pro", "~100 sessions / day", "Priority support", "Unlimited roasts"],
+    cta: "Go Max →",
     ctaStyle: "bg-white/10 border border-white/20 text-white hover:bg-white/15",
   },
 ];

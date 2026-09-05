@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 import Razorpay from "razorpay";
 import { auth } from "@/auth";
 
-// Placeholder INR pricing (rough $15 / $50 conversion, rounded) — confirm
+// Placeholder INR pricing (rough $1 / $5 conversion, rounded) — confirm
 // and adjust these before taking real payments. Annual = 10x monthly (2 months free).
 const MONTHLY_PAISE: Record<string, number> = {
-  basic: 129900, // ~₹1,299
-  pro: 419900, // ~₹4,199
+  basic: 9900, // ~₹99 ("Pro", $1)
+  pro: 44900, // ~₹449 ("Max", $5)
 };
 
 export async function POST(request: Request) {

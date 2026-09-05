@@ -10,8 +10,8 @@ const Scanner = dynamic(() => import("@/components/Scanner"), { ssr: false });
 
 // ─── Token System ────────────────────────────────────────────────────────────
 const TIER_CONFIG = {
-  basic: { name: "Starter", price: "$15/mo", dailyTokens: 100, costPerMessage: 10 },
-  pro:   { name: "Pro",     price: "$50/mo", dailyTokens: 500, costPerMessage: 5  },
+  basic: { name: "Pro", price: "$1/mo", dailyTokens: 100, costPerMessage: 10 },
+  pro:   { name: "Max", price: "$5/mo", dailyTokens: 500, costPerMessage: 5  },
 } as const;
 type Tier = keyof typeof TIER_CONFIG;
 

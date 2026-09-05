@@ -18,8 +18,8 @@ declare global {
 // the server is the source of truth for what's actually charged.
 // Annual = 10x monthly (2 months free).
 const TIER_PRICE_INR: Record<string, { monthly: string; annual: string }> = {
-  basic: { monthly: "₹1,299", annual: "₹12,990" },
-  pro: { monthly: "₹4,199", annual: "₹41,990" },
+  basic: { monthly: "₹99", annual: "₹990" },
+  pro: { monthly: "₹449", annual: "₹4,490" },
 };
 
 function loadRazorpayScript(): Promise<boolean> {
@@ -59,8 +59,8 @@ const TIERS = [
   },
   {
     id: "basic",
-    name: "Starter",
-    price: 15,
+    name: "Pro",
+    price: 1,
     badge: "Most Popular",
     badgeStyle: "bg-white text-black",
     cta: "Get Started — Pay & Chat",
@@ -81,11 +81,11 @@ const TIERS = [
   },
   {
     id: "pro",
-    name: "Pro",
-    price: 50,
+    name: "Max",
+    price: 5,
     badge: "Best Value",
     badgeStyle: "bg-white/10 text-white border border-white/15",
-    cta: "Go Pro — Pay & Chat",
+    cta: "Go Max — Pay & Chat",
     ctaStyle: "bg-white/10 border border-white/20 text-white hover:bg-white/15 hover:scale-[1.02] active:scale-[0.98]",
     disabled: false,
     description: "Complete access — full business intelligence, ~100 messages per day.",
@@ -152,7 +152,7 @@ function PaywallContent() {
         currency: order.currency,
         order_id: order.orderId,
         name: "Brutal Roaster",
-        description: `${tierId === "pro" ? "Pro" : "Starter"} plan — ${billing === "annual" ? "12 months" : "30 days"}`,
+        description: `${tierId === "pro" ? "Max" : "Pro"} plan — ${billing === "annual" ? "12 months" : "30 days"}`,
         prefill: {
           name: session.user.name || undefined,
           email: session.user.email || undefined,

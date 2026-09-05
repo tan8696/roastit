@@ -1,5 +1,7 @@
 import Groq from "groq-sdk";
 import { NextResponse } from "next/server";
+import { auth } from "@/auth";
+import { getEntitlement } from "@/lib/entitlement";
 
 const JINA_READER_BASE = "https://r.jina.ai/";
 const MAX_MARKDOWN_CHARS = 80_000;
@@ -76,6 +78,15 @@ async function scrapeWithJina(targetUrl: string): Promise<string> {
 }
 
 export async function POST(request: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+  const { active } = await getEntitlement(session.user.id);
+  if (!active) {
+    return NextResponse.json({ error: "An active plan is required." }, { status: 402 });
+  }
+
   const apiKey = process.env.GROQ_API_KEY;
 
   if (!apiKey) {

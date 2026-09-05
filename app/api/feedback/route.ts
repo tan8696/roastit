@@ -85,7 +85,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { rating = 0, category = "general", message = "" } = body;
+  const { rating = 0, message = "" } = body;
+  // categoryLabel below is keyed by these exact values and interpolated
+  // straight into the HTML email — falling back to "general" instead of
+  // trusting an arbitrary client-supplied string avoids injecting markup
+  // into an email client that renders it.
+  const ALLOWED_CATEGORIES = ["bug", "feature", "general", "praise"];
+  const category = ALLOWED_CATEGORIES.includes(body.category ?? "")
+    ? (body.category as string)
+    : "general";
 
   if (!message.trim()) {
     return NextResponse.json({ error: "Message is required." }, { status: 400 });

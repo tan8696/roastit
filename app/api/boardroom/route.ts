@@ -1,6 +1,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { auth } from "@/auth";
+import { getEntitlement } from "@/lib/entitlement";
 
 // ─── LLM Client Factory ───────────────────────────────────────────────────────
 function getModel(systemInstruction: string) {
@@ -64,7 +66,41 @@ const SUGGEST_GENERAL_INSTRUCTION =
   '[\"Question 1?\", \"Question 2?\", \"Question 3?\"]';
 
 // ─── Website Fetcher ──────────────────────────────────────────────────────────
+// Best-effort SSRF guard: this fetches whatever URL the client sends,
+// server-side, with no proxy in front of it (unlike /api/roast, which goes
+// through Jina). Without this, someone could point website_url at
+// 169.254.169.254 (cloud metadata), localhost, or an internal/private
+// address. This blocks literal internal hostnames/IPs; it doesn't defend
+// against DNS rebinding (a hostname that resolves to a private IP only at
+// fetch time), which would need resolving the DNS record before fetching.
+function isSafeExternalUrl(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+
+  const host = parsed.hostname.toLowerCase();
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "0.0.0.0") {
+    return false;
+  }
+  if (host === "169.254.169.254") return false; // cloud metadata endpoint
+
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/);
+  if (ipv4) {
+    const a = Number(ipv4[1]);
+    const b = Number(ipv4[2]);
+    if (a === 10 || a === 127) return false;
+    if (a === 172 && b >= 16 && b <= 31) return false;
+    if (a === 192 && b === 168) return false;
+  }
+  return true;
+}
+
 async function fetchWebsiteText(url: string): Promise<string> {
+  if (!isSafeExternalUrl(url)) return "";
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
@@ -127,13 +163,26 @@ async function generateSuggestedQuestions(
 
 // ─── Request Types ────────────────────────────────────────────────────────────
 type RequestBody = {
-  user_id: string;
   startup_idea: string;
   website_url?: string;
 };
 
 // ─── Main Handler ─────────────────────────────────────────────────────────────
 export async function POST(request: Request) {
+  // This is the most expensive endpoint in the app (up to 6 Gemini calls
+  // per request). The /boardroom page redirects unpaid users away, but
+  // that's only client-side routing — without a check here, anyone could
+  // call this directly and run it for free, unlimited times.
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+  const { active } = await getEntitlement(session.user.id);
+  if (!active) {
+    return NextResponse.json({ error: "An active plan is required." }, { status: 402 });
+  }
+  const userId = session.user.id;
+
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
@@ -149,13 +198,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const userId = body.user_id;
   const startupIdea = body.startup_idea?.trim();
   const websiteUrl = body.website_url?.trim() || "";
 
-  if (!userId || !startupIdea) {
+  if (!startupIdea) {
     return NextResponse.json(
-      { error: "user_id and startup_idea are required." },
+      { error: "startup_idea is required." },
       { status: 400 }
     );
   }

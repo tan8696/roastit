@@ -1,11 +1,18 @@
 import Groq from "groq-sdk";
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { auth } from "@/auth";
 import { getEntitlement } from "@/lib/entitlement";
 
 const JINA_READER_BASE = "https://r.jina.ai/";
 const MAX_MARKDOWN_CHARS = 80_000;
 const SCRAPE_TIMEOUT_MS = 25_000;
+
+// ponytail: one free roast per browser via an httpOnly cookie — trivially
+// bypassable (incognito, clearing cookies). Good enough for a marketing-page
+// teaser; upgrade to IP + Supabase-backed counting if Groq usage shows abuse.
+const FREE_ROAST_COOKIE = "brutal_free_roast";
+const FREE_ROAST_MAX_AGE_S = 60 * 60 * 24; // 24h
 
 const SYSTEM_INSTRUCTION =
   "You are a ruthless, highly expensive direct-response copywriter and UX expert. " +
@@ -79,12 +86,18 @@ async function scrapeWithJina(targetUrl: string): Promise<string> {
 
 export async function POST(request: Request) {
   const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
-  const { active } = await getEntitlement(session.user.id);
-  if (!active) {
-    return NextResponse.json({ error: "An active plan is required." }, { status: 402 });
+  const { active: isPaid } = session?.user?.id
+    ? await getEntitlement(session.user.id)
+    : { active: false };
+
+  const cookieStore = await cookies();
+  const usedFreeRoast = cookieStore.get(FREE_ROAST_COOKIE)?.value === "1";
+
+  if (!isPaid && usedFreeRoast) {
+    return NextResponse.json(
+      { error: "You've used your free roast. Sign up for more at $1/mo." },
+      { status: 402 }
+    );
   }
 
   const apiKey = process.env.GROQ_API_KEY;
@@ -157,7 +170,16 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ roast });
+    const response = NextResponse.json({ roast });
+    if (!isPaid) {
+      response.cookies.set(FREE_ROAST_COOKIE, "1", {
+        httpOnly: true,
+        maxAge: FREE_ROAST_MAX_AGE_S,
+        sameSite: "lax",
+        path: "/",
+      });
+    }
+    return response;
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown Groq error.";

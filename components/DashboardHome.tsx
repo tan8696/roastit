@@ -217,25 +217,21 @@ function AccountMenu({
   email,
   avatarUrl,
   onSignOut,
-  onDeleteAccount,
   onFeedback,
 }: {
   name: string;
   email: string;
   avatarUrl?: string;
   onSignOut: () => void;
-  onDeleteAccount: () => void;
   onFeedback: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setOpen(false);
-        setConfirmDelete(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -247,7 +243,7 @@ function AccountMenu({
       {/* Avatar button */}
       <button
         id="account-menu-btn"
-        onClick={() => { setOpen(!open); setConfirmDelete(false); }}
+        onClick={() => setOpen(!open)}
         className="flex items-center gap-2.5 px-3 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 transition-all duration-200 cursor-pointer"
       >
         {avatarUrl ? (
@@ -328,6 +324,17 @@ function AccountMenu({
               Send Feedback
             </button>
 
+            <a
+              href="/settings"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-white/60 hover:text-white hover:bg-white/5 transition-all duration-150 cursor-pointer"
+            >
+              <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009.6 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 8.6a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+              </svg>
+              Settings
+            </a>
+
             <button
               id="signout-btn"
               onClick={onSignOut}
@@ -338,46 +345,6 @@ function AccountMenu({
               </svg>
               Sign out
             </button>
-
-            <div className="h-px bg-white/8 my-2" />
-
-            {/* Delete Account */}
-            {!confirmDelete ? (
-              <button
-                id="delete-account-btn"
-                onClick={() => setConfirmDelete(true)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-red-400/70 hover:text-red-400 hover:bg-red-500/5 transition-all duration-150 cursor-pointer text-left"
-              >
-                <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
-                  <path d="M10 11v6M14 11v6M9 6V4h6v2" />
-                </svg>
-                Delete Account
-              </button>
-            ) : (
-              <div className="px-3 py-3 rounded-xl bg-red-500/5 border border-red-500/15">
-                <p className="text-xs text-red-400/80 mb-3 leading-relaxed">
-                  This will permanently delete your account and all data. This cannot be undone.
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    id="delete-account-cancel-btn"
-                    onClick={() => setConfirmDelete(false)}
-                    className="flex-1 py-1.5 rounded-lg text-xs text-white/50 border border-white/10 hover:border-white/20 hover:text-white transition-all cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    id="delete-account-confirm-btn"
-                    onClick={onDeleteAccount}
-                    className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-red-400 border border-red-500/30 hover:bg-red-500/10 transition-all cursor-pointer"
-                  >
-                    Yes, Delete
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -408,11 +375,6 @@ export default function DashboardHome() {
   }
 
   async function handleSignOut() {
-    await signOut({ callbackUrl: "/login" });
-  }
-
-  async function handleDeleteAccount() {
-    // In a real app: call DELETE /api/user here
     await signOut({ callbackUrl: "/login" });
   }
 
@@ -472,7 +434,6 @@ export default function DashboardHome() {
             email={userEmail}
             avatarUrl={avatarUrl}
             onSignOut={handleSignOut}
-            onDeleteAccount={handleDeleteAccount}
             onFeedback={() => setShowFeedback(true)}
           />
         </nav>
@@ -497,35 +458,6 @@ export default function DashboardHome() {
             Paste any URL. Our ruthless AI copywriter scrapes it, exposes every conversion
             killer, and hands you a ready-to-ship rewrite — in seconds.
           </p>
-
-          {/* Social proof */}
-          <div
-            className="inline-flex flex-wrap items-center gap-6 mt-8 px-4 py-3 rounded-full border border-white/8"
-            style={{ background: "rgba(255,255,255,0.02)" }}
-          >
-            <div className="flex items-center gap-2">
-              <div className="flex -space-x-2">
-                {["stripe.com", "linear.app", "notion.so", "loom.com"].map((domain, i) => (
-                  <img
-                    key={i}
-                    src={`https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64`}
-                    alt={domain}
-                    className="w-7 h-7 rounded-full border-2 border-black bg-white object-cover"
-                  />
-                ))}
-              </div>
-              <span className="text-xs text-white/30">2,400+ pages roasted</span>
-            </div>
-            <div className="w-px h-4 bg-white/8" />
-            <div className="flex items-center gap-1.5">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <svg key={i} className="w-3.5 h-3.5 text-white/50 fill-current" viewBox="0 0 20 20">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-              ))}
-              <span className="text-xs text-white/30 ml-1">4.9/5 avg rating</span>
-            </div>
-          </div>
         </div>
 
         {/* URL Input → paywall */}

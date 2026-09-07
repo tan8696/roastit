@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { RoastForm } from "@/components/RoastForm";
 
 const Scanner = dynamic(() => import("@/components/Scanner"), { ssr: false });
 
@@ -9,6 +10,20 @@ const FEATURES = [
   { icon: "🔥", title: "The Brutal Truth", desc: "Why your page fails to convert — specific, cited, ruthless." },
   { icon: "🚨", title: "UX Friction Points", desc: "Every weak trust signal and conversion killer, in bullets." },
   { icon: "✍️", title: "The Rewrite", desc: "A high-converting headline, subheadline & CTA. Done for you." },
+];
+
+const STEPS = [
+  { n: "1", title: "Paste your URL", desc: "Drop in any live landing page. No screenshots, no setup." },
+  { n: "2", title: "AI tears it apart", desc: "We scrape the real content and analyze it like a $500/hr copywriter would." },
+  { n: "3", title: "Get your rewrite", desc: "A ready-to-ship headline, subheadline, and CTA — done for you." },
+];
+
+const FAQ = [
+  { q: "Is the first roast actually free?", a: "Yes — paste a URL below and you'll get one full teardown with no signup. After that, plans start at $1/mo." },
+  { q: "What AI models power this?", a: "Landing page teardowns run on Llama 3.3 (via Groq) for fast, cheap analysis. The chat assistant and Virtual Boardroom run on Google Gemini." },
+  { q: "How is this different from asking ChatGPT?", a: "We scrape your actual page content first, so every critique cites real copy from your site instead of generic advice." },
+  { q: "Can I cancel anytime?", a: "Yes, subscriptions are month-to-month with no lock-in — cancel from your account settings whenever you like." },
+  { q: "Is my data stored?", a: "We scrape the page you submit to generate your report. See our Privacy Policy for full details." },
 ];
 
 // Shown to anyone who isn't signed in — including search engines and
@@ -85,20 +100,16 @@ export default function MarketingHome() {
             killer, and hands you a ready-to-ship rewrite — in seconds.
           </p>
 
-          <div className="flex flex-wrap gap-3 mt-8">
-            <Link
-              href="/login"
-              className="px-6 py-3.5 rounded-xl font-bold text-sm text-black bg-white whitespace-nowrap transition-all duration-200 hover:scale-105 hover:shadow-[0_0_20px_rgba(255,255,255,0.25)] active:scale-[0.97]"
-            >
-              Get Started Free →
-            </Link>
-            <Link
-              href="/about"
-              className="px-6 py-3.5 rounded-xl font-bold text-sm text-white border border-white/15 bg-white/5 hover:bg-white/10 transition-all duration-200"
-            >
-              How it works
-            </Link>
+          {/* Try it free, right here — no signup required for the first one */}
+          <div className="mt-8 max-w-xl">
+            <RoastForm />
           </div>
+          <a
+            href="#how-it-works"
+            className="inline-block mt-4 text-xs text-white/35 hover:text-white/60 underline underline-offset-2 transition-colors"
+          >
+            How it works
+          </a>
         </div>
 
         {/* Boardroom teaser */}
@@ -149,6 +160,85 @@ export default function MarketingHome() {
               <p className="text-xs text-white/30 leading-relaxed">{card.desc}</p>
             </div>
           ))}
+        </div>
+
+        {/* How it works */}
+        <div id="how-it-works" className="mb-16 scroll-mt-20">
+          <h2 className="text-2xl font-black text-white mb-8 text-center">How it works</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {STEPS.map((step) => (
+              <div
+                key={step.n}
+                className="rounded-xl border border-white/8 p-5"
+                style={{ background: "rgba(255,255,255,0.02)" }}
+              >
+                <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-sm font-bold text-white mb-4">
+                  {step.n}
+                </div>
+                <h3 className="text-sm font-semibold text-white mb-1">{step.title}</h3>
+                <p className="text-xs text-white/30 leading-relaxed">{step.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Example teardown */}
+        <div className="mb-16">
+          <h2 className="text-2xl font-black text-white mb-2 text-center">See it in action</h2>
+          <p className="text-white/35 text-sm text-center mb-8">
+            A real teardown, on a headline every SaaS site has used at some point.
+          </p>
+          <div
+            className="rounded-2xl border border-white/10 p-6 space-y-5"
+            style={{ background: "rgba(255,255,255,0.02)" }}
+          >
+            <div className="pb-5 border-b border-white/8">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-white/30">Before</span>
+              <p className="text-white/50 text-sm mt-1 font-mono">
+                &ldquo;Welcome to Acme — Your One-Stop Solution for All Your Business Needs.&rdquo;
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-base">🔥</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-white/70">The Brutal Truth</span>
+              </div>
+              <p className="text-white/40 text-sm leading-relaxed">
+                &ldquo;One-stop solution for all your business needs&rdquo; says nothing. It could be any
+                product, for any customer, solving any problem. Visitors bounce in 3 seconds because
+                they can&apos;t tell what you actually do.
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-base">✍️</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-white/70">The Rewrite</span>
+              </div>
+              <p className="text-white/60 text-sm leading-relaxed font-medium">
+                &ldquo;Invoicing for freelancers, paid in 2 days instead of 30.&rdquo;
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* FAQ */}
+        <div className="mb-16">
+          <h2 className="text-2xl font-black text-white mb-8 text-center">Questions</h2>
+          <div className="space-y-2 max-w-2xl mx-auto">
+            {FAQ.map((item) => (
+              <details
+                key={item.q}
+                className="group rounded-xl border border-white/8 px-5 py-4"
+                style={{ background: "rgba(255,255,255,0.02)" }}
+              >
+                <summary className="text-sm font-semibold text-white cursor-pointer list-none flex items-center justify-between gap-4">
+                  {item.q}
+                  <span className="text-white/30 transition-transform duration-200 group-open:rotate-45 shrink-0">+</span>
+                </summary>
+                <p className="text-xs text-white/35 leading-relaxed mt-3">{item.a}</p>
+              </details>
+            ))}
+          </div>
         </div>
 
         {/* Pricing teaser */}

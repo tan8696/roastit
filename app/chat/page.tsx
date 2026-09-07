@@ -6,6 +6,7 @@ import { useSession, signOut } from "next-auth/react";
 import dynamic from "next/dynamic";
 import Markdown from "react-markdown";
 import { Skeleton } from "@/components/Skeleton";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 const Scanner = dynamic(() => import("@/components/Scanner"), { ssr: false });
 
@@ -123,6 +124,14 @@ function makeSessionTitle(firstUserMessage: string): string {
 function MessageBubble({ msg }: { msg: Message }) {
   const isUser = msg.role === "user";
   const ts = new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(msg.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
   return (
     <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : "flex-row"} mb-6`}>
       <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${isUser ? "bg-white text-black" : "bg-white/10 text-white border border-white/15"}`}>
@@ -146,9 +155,16 @@ function MessageBubble({ msg }: { msg: Message }) {
             </article>
           )}
         </div>
-        <span className="text-[10px] text-white/20 px-1">
-          {ts}{msg.tokensUsed && isUser && <span className="ml-2 text-white/15">−{msg.tokensUsed} tokens</span>}
-        </span>
+        <div className="flex items-center gap-2 px-1">
+          <span className="text-[10px] text-white/20">
+            {ts}{msg.tokensUsed && isUser && <span className="ml-2 text-white/15">−{msg.tokensUsed} tokens</span>}
+          </span>
+          {!isUser && (
+            <button onClick={handleCopy} className="text-[10px] text-white/20 hover:text-white/50 transition-colors cursor-pointer">
+              {copied ? "Copied" : "Copy"}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -333,6 +349,8 @@ function ChatContent() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const [failedRetry, setFailedRetry] = useState<{ apiMessages: { role: string; content: string }[] } | null>(null);
 
   // On phones the 288px sidebar was eating almost the entire viewport,
   // leaving the chat itself an unusable sliver. Start collapsed there.
@@ -431,47 +449,29 @@ function ChatContent() {
 
   const config = TIER_CONFIG[tier];
 
-  async function handleSend(e?: FormEvent) {
-    e?.preventDefault();
-    const text = input.trim();
-    if (!text || !tokenState || isTyping) return;
-
-    if (tokenState.tokens < config.costPerMessage) {
-      setError(`Not enough tokens. Need ${config.costPerMessage}, have ${tokenState.tokens}. Resets at midnight.`);
-      return;
-    }
-    setError("");
-
-    const newTokens = tokenState.tokens - config.costPerMessage;
-    const newState = { ...tokenState, tokens: newTokens };
-    setTokenState(newState);
-    saveTokenState(newState);
-
-    const userMsg: Message = {
-      id: Date.now().toString(), role: "user", content: text,
-      tokensUsed: config.costPerMessage, timestamp: new Date().toISOString(),
-    };
-    const updatedMessages = [...messages, userMsg];
-    setMessages(updatedMessages);
-    setInput("");
+  // Streams the assistant's reply for a given message history. Split out of
+  // handleSend so a failed turn can be retried without re-sending the user's
+  // message or re-deducting tokens for an attempt that never got a reply.
+  async function runAssistantTurn(apiMessages: { role: string; content: string }[]) {
     setIsTyping(true);
     setThinkingPhase("thinking");  // ← show thinking panel immediately
     setThinkingContent("");
-
-    const apiMessages = updatedMessages
-      .filter(m => m.id !== "welcome" && !m.id.startsWith("welcome"))
-      .map(m => ({ role: m.role, content: m.content }));
+    setError("");
+    setFailedRetry(null);
 
     const aiMsgId = (Date.now() + 1).toString();
     let replyText = "";
     let thoughtsText = "";
     let sawReplyText = false;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: apiMessages, tier }),
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -546,14 +546,58 @@ function ChatContent() {
       });
     } catch (err) {
       setThinkingPhase("gone");
-      // Drop the partial assistant bubble on failure rather than leaving a
-      // half-written message with no way to retry it.
-      setMessages(prev => prev.filter(m => m.id !== aiMsgId));
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      if (controller.signal.aborted) {
+        // User hit "stop" — keep whatever partial reply already rendered.
+        setMessages(prev => prev.map(m =>
+          m.id === aiMsgId ? { ...m, content: replyText.trim() || "*(stopped)*" } : m
+        ));
+      } else {
+        // Drop the partial assistant bubble on a real failure rather than
+        // leaving a half-written message, and offer to retry this turn.
+        setMessages(prev => prev.filter(m => m.id !== aiMsgId));
+        setError(err instanceof Error ? err.message : "Something went wrong.");
+        setFailedRetry({ apiMessages });
+      }
     } finally {
       setIsTyping(false);
+      abortControllerRef.current = null;
       setTimeout(() => inputRef.current?.focus(), 50);
     }
+  }
+
+  async function handleSend(e?: FormEvent) {
+    e?.preventDefault();
+    const text = input.trim();
+    if (!text || !tokenState || isTyping) return;
+
+    if (tokenState.tokens < config.costPerMessage) {
+      setError(`Not enough tokens. Need ${config.costPerMessage}, have ${tokenState.tokens}. Resets at midnight.`);
+      return;
+    }
+    setError("");
+
+    const newTokens = tokenState.tokens - config.costPerMessage;
+    const newState = { ...tokenState, tokens: newTokens };
+    setTokenState(newState);
+    saveTokenState(newState);
+
+    const userMsg: Message = {
+      id: Date.now().toString(), role: "user", content: text,
+      tokensUsed: config.costPerMessage, timestamp: new Date().toISOString(),
+    };
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
+    setInput("");
+
+    const apiMessages = updatedMessages
+      .filter(m => m.id !== "welcome" && !m.id.startsWith("welcome"))
+      .map(m => ({ role: m.role, content: m.content }));
+
+    await runAssistantTurn(apiMessages);
+  }
+
+  function handleStopGenerating() {
+    abortControllerRef.current?.abort();
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -768,14 +812,13 @@ function ChatContent() {
 
         {/* Error banner */}
         {error && (
-          <div className="mx-4 mb-2 px-4 py-2.5 rounded-xl bg-red-500/8 border border-red-500/15 flex items-center gap-2">
-            <svg className="w-3.5 h-3.5 text-red-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" />
-            </svg>
-            <p className="text-xs text-red-300 flex-1">{error}</p>
-            <button onClick={() => setError("")} className="text-red-400/50 hover:text-red-400 cursor-pointer shrink-0">
-              <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" /></svg>
-            </button>
+          <div className="mx-4 mb-2">
+            <ErrorBanner
+              message={error}
+              onDismiss={() => setError("")}
+              actionLabel={failedRetry ? "Retry" : undefined}
+              onAction={failedRetry ? () => runAssistantTurn(failedRetry.apiMessages) : undefined}
+            />
           </div>
         )}
 
@@ -827,15 +870,14 @@ function ChatContent() {
                 />
                 <button
                   id="chat-send-btn"
-                  type="submit"
-                  disabled={!input.trim() || depleted || isTyping}
+                  type={isTyping ? "button" : "submit"}
+                  onClick={isTyping ? handleStopGenerating : undefined}
+                  disabled={!isTyping && (!input.trim() || depleted)}
+                  title={isTyping ? "Stop generating" : "Send"}
                   className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all duration-200 bg-white text-black hover:bg-white/90 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {isTyping ? (
-                    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                    </svg>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
                   ) : (
                     <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                       <path d="M22 2L11 13M22 2L15 22l-4-9-9-4 19-7z" />

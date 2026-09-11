@@ -38,6 +38,9 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Brutal Roaster" }],
   creator: "Brutal Roaster",
+  alternates: {
+    canonical: SITE_URL,
+  },
   robots: {
     index: true,
     follow: true,

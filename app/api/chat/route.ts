@@ -1,6 +1,9 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { checkRateLimit } from "@/lib/rateLimit";
+
+const RATE_LIMIT = { limit: 20, windowSeconds: 60 }; // 20 messages/min per user
 
 const SYSTEM_INSTRUCTION =
   "You are Brutal — a ruthless, world-class direct-response copywriter, business strategist, and landing page conversion expert. " +
@@ -27,6 +30,14 @@ export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+
+  const { success: withinLimit } = await checkRateLimit(`chat:${session.user.id}`, RATE_LIMIT);
+  if (!withinLimit) {
+    return NextResponse.json(
+      { error: "You're sending messages too fast. Try again in a minute." },
+      { status: 429 }
+    );
   }
 
   const apiKey = process.env.GEMINI_API_KEY;

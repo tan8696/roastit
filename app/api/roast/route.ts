@@ -1,9 +1,12 @@
 import Groq from "groq-sdk";
 import { NextResponse } from "next/server";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
+import { getCachedRoast, setCachedRoast } from "@/lib/roastCache";
 
 const JINA_READER_BASE = "https://r.jina.ai/";
 const MAX_MARKDOWN_CHARS = 80_000;
 const SCRAPE_TIMEOUT_MS = 25_000;
+const RATE_LIMIT = { limit: 5, windowSeconds: 60 }; // 5 roasts/min per IP — this endpoint has no auth wall
 
 const SYSTEM_INSTRUCTION =
   "You are a ruthless, highly expensive direct-response copywriter and UX expert. " +
@@ -90,6 +93,14 @@ export async function POST(request: Request) {
     );
   }
 
+  const { success: withinLimit } = await checkRateLimit(getClientIp(request), RATE_LIMIT);
+  if (!withinLimit) {
+    return NextResponse.json(
+      { error: "You're sending requests too fast. Try again in a minute." },
+      { status: 429 }
+    );
+  }
+
   let body: RoastRequestBody;
 
   try {
@@ -108,6 +119,11 @@ export async function POST(request: Request) {
       { error: "Provide a valid http or https website URL." },
       { status: 400 }
     );
+  }
+
+  const cachedRoast = await getCachedRoast(url);
+  if (cachedRoast) {
+    return NextResponse.json({ roast: cachedRoast, cached: true });
   }
 
   let scrapedMarkdown: string;
@@ -151,6 +167,7 @@ export async function POST(request: Request) {
       );
     }
 
+    await setCachedRoast(url, roast);
     return NextResponse.json({ roast });
   } catch (error) {
     const message =

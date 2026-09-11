@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { auth } from "@/auth";
 import { safeFetch } from "@/lib/safeFetch";
+import { checkRateLimit } from "@/lib/rateLimit";
+
+const RATE_LIMIT = { limit: 5, windowSeconds: 60 }; // 5 sessions/min per user — this is the most expensive endpoint (up to 6 LLM calls/request)
 
 // ─── LLM Client Factory ───────────────────────────────────────────────────────
 function getModel(systemInstruction: string) {
@@ -157,6 +160,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
   const userId = session.user.id;
+
+  const { success: withinLimit } = await checkRateLimit(`boardroom:${userId}`, RATE_LIMIT);
+  if (!withinLimit) {
+    return NextResponse.json(
+      { error: "You're submitting ideas too fast. Try again in a minute." },
+      { status: 429 }
+    );
+  }
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {

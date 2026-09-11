@@ -19,10 +19,9 @@ const STEPS = [
 ];
 
 const FAQ = [
-  { q: "Is the first roast actually free?", a: "Yes — paste a URL below and you'll get one full teardown with no signup. After that, plans start at $1/mo." },
+  { q: "Is this actually free?", a: "Yes — paste a URL below and get a full teardown with no signup. Sign in for unlimited roasts plus the AI chat and Virtual Boardroom, also free." },
   { q: "What AI models power this?", a: "Landing page teardowns run on Llama 3.3 (via Groq) for fast, cheap analysis. The chat assistant and Virtual Boardroom run on Google Gemini." },
   { q: "How is this different from asking ChatGPT?", a: "We scrape your actual page content first, so every critique cites real copy from your site instead of generic advice." },
-  { q: "Can I cancel anytime?", a: "Yes, subscriptions are month-to-month with no lock-in — cancel from your account settings whenever you like." },
   { q: "Is my data stored?", a: "We scrape the page you submit to generate your report. See our Privacy Policy for full details." },
 ];
 
@@ -241,22 +240,15 @@ export default function MarketingHome() {
           </div>
         </div>
 
-        {/* Pricing teaser */}
+        {/* Free teaser */}
         <div
           className="rounded-2xl border border-white/10 p-6 mb-16 text-center"
           style={{ background: "rgba(255,255,255,0.02)" }}
         >
-          <p className="text-xs text-white/35 uppercase tracking-wider font-semibold mb-3">Simple pricing</p>
-          <div className="flex flex-wrap justify-center gap-8 mb-5">
-            <div>
-              <span className="text-3xl font-black text-white">$1</span>
-              <span className="text-white/35 text-sm">/mo Pro</span>
-            </div>
-            <div>
-              <span className="text-3xl font-black text-white">$5</span>
-              <span className="text-white/35 text-sm">/mo Max</span>
-            </div>
-          </div>
+          <p className="text-xs text-white/35 uppercase tracking-wider font-semibold mb-3">100% free</p>
+          <p className="text-white/50 text-sm mb-5 max-w-md mx-auto">
+            Unlimited roasts, AI chat, and the Virtual Boardroom — no credit card, ever.
+          </p>
           <Link
             href="/login"
             className="inline-block px-6 py-3 rounded-xl font-bold text-sm text-black bg-white hover:bg-white/90 transition-all duration-200"

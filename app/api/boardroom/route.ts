@@ -2,7 +2,6 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { auth } from "@/auth";
-import { getEntitlement } from "@/lib/entitlement";
 
 // ─── LLM Client Factory ───────────────────────────────────────────────────────
 function getModel(systemInstruction: string) {
@@ -169,17 +168,9 @@ type RequestBody = {
 
 // ─── Main Handler ─────────────────────────────────────────────────────────────
 export async function POST(request: Request) {
-  // This is the most expensive endpoint in the app (up to 6 Gemini calls
-  // per request). The /boardroom page redirects unpaid users away, but
-  // that's only client-side routing — without a check here, anyone could
-  // call this directly and run it for free, unlimited times.
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
-  const { active } = await getEntitlement(session.user.id);
-  if (!active) {
-    return NextResponse.json({ error: "An active plan is required." }, { status: 402 });
   }
   const userId = session.user.id;
 

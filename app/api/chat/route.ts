@@ -1,7 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { getEntitlement } from "@/lib/entitlement";
 
 const SYSTEM_INSTRUCTION =
   "You are Brutal — a ruthless, world-class direct-response copywriter, business strategist, and landing page conversion expert. " +
@@ -25,16 +24,9 @@ type RequestBody = {
 // as it's generated instead of waiting for the full response:
 // {"t":"thought","v":"..."} | {"t":"text","v":"..."} | {"t":"error","v":"..."}
 export async function POST(request: Request) {
-  // The /chat page redirects unpaid users to /paywall, but that's just
-  // client-side routing — without this, anyone could call this endpoint
-  // directly and get free, unlimited Gemini access.
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
-  const { active } = await getEntitlement(session.user.id);
-  if (!active) {
-    return NextResponse.json({ error: "An active plan is required." }, { status: 402 });
   }
 
   const apiKey = process.env.GEMINI_API_KEY;

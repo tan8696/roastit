@@ -39,45 +39,15 @@ function ChatSkeleton() {
   );
 }
 
-// ─── Token System ────────────────────────────────────────────────────────────
-const TIER_CONFIG = {
-  basic: { name: "Pro", price: "$1/mo", dailyTokens: 100, costPerMessage: 10 },
-  pro:   { name: "Max", price: "$5/mo", dailyTokens: 500, costPerMessage: 5  },
-} as const;
-type Tier = keyof typeof TIER_CONFIG;
-
-interface TokenState {
-  tier: Tier; tokens: number; dailyLimit: number; lastReset: string;
-}
 function getTodayStr() { return new Date().toISOString().slice(0, 10); }
-function loadTokenState(tier: Tier): TokenState {
-  const today = getTodayStr();
-  const config = TIER_CONFIG[tier];
-  try {
-    const raw = localStorage.getItem("brutal_tokens");
-    if (raw) {
-      const saved: TokenState = JSON.parse(raw);
-      if (saved.lastReset !== today || saved.tier !== tier) {
-        const fresh = { tier, tokens: config.dailyTokens, dailyLimit: config.dailyTokens, lastReset: today };
-        localStorage.setItem("brutal_tokens", JSON.stringify(fresh)); return fresh;
-      }
-      return saved;
-    }
-  } catch {}
-  const fresh = { tier, tokens: config.dailyTokens, dailyLimit: config.dailyTokens, lastReset: today };
-  localStorage.setItem("brutal_tokens", JSON.stringify(fresh)); return fresh;
-}
-function saveTokenState(state: TokenState) {
-  localStorage.setItem("brutal_tokens", JSON.stringify(state));
-}
 
 // ─── Chat History ─────────────────────────────────────────────────────────────
 interface Message {
   id: string; role: "user" | "assistant"; content: string;
-  tokensUsed?: number; timestamp: string; // ISO string for serialisability
+  timestamp: string; // ISO string for serialisability
 }
 interface ChatSession {
-  id: string; title: string; tier: Tier;
+  id: string; title: string;
   messages: Message[]; createdAt: string; updatedAt: string;
 }
 const HISTORY_KEY = "brutal_chat_history";
@@ -156,9 +126,7 @@ function MessageBubble({ msg }: { msg: Message }) {
           )}
         </div>
         <div className="flex items-center gap-2 px-1">
-          <span className="text-[10px] text-white/20">
-            {ts}{msg.tokensUsed && isUser && <span className="ml-2 text-white/15">−{msg.tokensUsed} tokens</span>}
-          </span>
+          <span className="text-[10px] text-white/20">{ts}</span>
           {!isUser && (
             <button onClick={handleCopy} className="text-[10px] text-white/20 hover:text-white/50 transition-colors cursor-pointer">
               {copied ? "Copied" : "Copy"}
@@ -308,8 +276,6 @@ function HistoryItem({
         <p className={`text-xs truncate ${isActive ? "text-white font-medium" : "text-white/60"}`}>{session.title}</p>
         <p className="text-[10px] text-white/25 mt-0.5">
           {session.messages.filter(m => m.role === "user").length} messages
-          {" · "}
-          <span className="capitalize">{TIER_CONFIG[session.tier]?.name ?? session.tier}</span>
         </p>
       </div>
       {hovering && (
@@ -336,8 +302,6 @@ function ChatContent() {
   const sessionParam = searchParams.get("session") || "";
 
   const [authed, setAuthed] = useState(false);
-  const [tier, setTier] = useState<Tier>("basic");
-  const [tokenState, setTokenState] = useState<TokenState | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string>("");
   const [history, setHistory] = useState<ChatSession[]>([]);
@@ -375,52 +339,28 @@ function ChatContent() {
   useEffect(() => {
     if (!authed && status !== "authenticated") return;
 
-    (async () => {
-      // The tier used to come straight from the URL (?tier=pro), which
-      // meant anyone could type that in and get Pro limits for free.
-      // Now it's read from what was actually paid for.
-      let resolvedTier: Tier = "basic";
-      try {
-        const res = await fetch("/api/user/entitlement");
-        const data = await res.json();
-        if (!data.active) {
-          router.replace("/paywall");
-          return;
-        }
-        resolvedTier = data.tier === "pro" ? "pro" : "basic";
-      } catch {
-        router.replace("/paywall");
+    // If ?session=id is in URL, load that session
+    if (sessionParam) {
+      const h = loadHistory();
+      const found = h.find(s => s.id === sessionParam);
+      if (found) {
+        setCurrentSessionId(found.id);
+        setMessages(found.messages);
         return;
       }
+    }
 
-      setTier(resolvedTier);
-      const ts = loadTokenState(resolvedTier);
-      setTokenState(ts);
-
-      // If ?session=id is in URL, load that session
-      if (sessionParam) {
-        const h = loadHistory();
-        const found = h.find(s => s.id === sessionParam);
-        if (found) {
-          setCurrentSessionId(found.id);
-          setMessages(found.messages);
-          setTier(found.tier);
-          return;
-        }
-      }
-
-      // Otherwise start a fresh new chat
-      startNewChat(resolvedTier, ts, urlParam);
-    })();
+    // Otherwise start a fresh new chat
+    startNewChat(urlParam);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed, status]);
 
-  function startNewChat(t: Tier, ts: TokenState, url: string) {
+  function startNewChat(url: string) {
     const newId = `chat_${Date.now()}`;
     setCurrentSessionId(newId);
     const welcomeText = url
-      ? `Welcome! I can see you want to analyse **${url}**.\n\nI'm **Brutal** — your AI business & landing page expert. I've loaded your **${TIER_CONFIG[t].name}** plan (${ts.tokens} tokens today, ${TIER_CONFIG[t].costPerMessage}/msg).\n\nShall I start with a full teardown of that URL?`
-      : `Welcome! I'm **Brutal** — your ruthless AI business strategist and landing page expert.\n\n**${TIER_CONFIG[t].name}** plan · **${ts.tokens} tokens** today · ${TIER_CONFIG[t].costPerMessage} tokens per message (resets midnight)\n\nAsk me anything: landing page teardowns, copy rewrites, CRO, pricing strategy, funnel analysis — or paste any URL.`;
+      ? `Welcome! I can see you want to analyse **${url}**.\n\nI'm **Brutal** — your AI business & landing page expert.\n\nShall I start with a full teardown of that URL?`
+      : `Welcome! I'm **Brutal** — your ruthless AI business strategist and landing page expert.\n\nAsk me anything: landing page teardowns, copy rewrites, CRO, pricing strategy, funnel analysis — or paste any URL.`;
 
     setMessages([{ id: "welcome", role: "assistant", content: welcomeText, timestamp: new Date().toISOString() }]);
     setError("");
@@ -432,13 +372,13 @@ function ChatContent() {
   }, [messages, isTyping]);
 
   // Save current session to history whenever messages change (but skip welcome-only)
-  const saveCurrentSession = useCallback((msgs: Message[], sessionId: string, t: Tier) => {
+  const saveCurrentSession = useCallback((msgs: Message[], sessionId: string) => {
     const userMsgs = msgs.filter(m => m.role === "user");
     if (userMsgs.length === 0 || !sessionId) return;
     const title = makeSessionTitle(userMsgs[0].content);
     const now = new Date().toISOString();
     const newSession: ChatSession = {
-      id: sessionId, title, tier: t, messages: msgs,
+      id: sessionId, title, messages: msgs,
       createdAt: msgs[0].timestamp, updatedAt: now,
     };
     const h = loadHistory();
@@ -447,11 +387,9 @@ function ChatContent() {
     setHistory(updated);
   }, []);
 
-  const config = TIER_CONFIG[tier];
-
   // Streams the assistant's reply for a given message history. Split out of
   // handleSend so a failed turn can be retried without re-sending the user's
-  // message or re-deducting tokens for an attempt that never got a reply.
+  // message.
   async function runAssistantTurn(apiMessages: { role: string; content: string }[]) {
     setIsTyping(true);
     setThinkingPhase("thinking");  // ← show thinking panel immediately
@@ -470,7 +408,7 @@ function ChatContent() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: apiMessages, tier }),
+        body: JSON.stringify({ messages: apiMessages }),
         signal: controller.signal,
       });
 
@@ -541,7 +479,7 @@ function ChatContent() {
         const finalMessages = prev.map(m =>
           m.id === aiMsgId ? { ...m, content: replyText.trim() } : m
         );
-        saveCurrentSession(finalMessages, currentSessionId, tier);
+        saveCurrentSession(finalMessages, currentSessionId);
         return finalMessages;
       });
     } catch (err) {
@@ -568,22 +506,13 @@ function ChatContent() {
   async function handleSend(e?: FormEvent) {
     e?.preventDefault();
     const text = input.trim();
-    if (!text || !tokenState || isTyping) return;
+    if (!text || isTyping) return;
 
-    if (tokenState.tokens < config.costPerMessage) {
-      setError(`Not enough tokens. Need ${config.costPerMessage}, have ${tokenState.tokens}. Resets at midnight.`);
-      return;
-    }
     setError("");
-
-    const newTokens = tokenState.tokens - config.costPerMessage;
-    const newState = { ...tokenState, tokens: newTokens };
-    setTokenState(newState);
-    saveTokenState(newState);
 
     const userMsg: Message = {
       id: Date.now().toString(), role: "user", content: text,
-      tokensUsed: config.costPerMessage, timestamp: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
     };
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
@@ -607,9 +536,6 @@ function ChatContent() {
   function handleLoadSession(s: ChatSession) {
     setCurrentSessionId(s.id);
     setMessages(s.messages);
-    setTier(s.tier);
-    const ts = loadTokenState(s.tier);
-    setTokenState(ts);
     setError("");
     setSidebarOpen(true);
   }
@@ -621,15 +547,12 @@ function ChatContent() {
     setHistory(updated);
     // If deleting current session, start fresh
     if (id === currentSessionId) {
-      const ts = tokenState ?? loadTokenState(tier);
-      startNewChat(tier, ts, "");
+      startNewChat("");
     }
   }
 
   function handleNewChat() {
-    const ts = loadTokenState(tier);
-    setTokenState(ts);
-    startNewChat(tier, ts, "");
+    startNewChat("");
     setSidebarOpen(true);
   }
 
@@ -637,8 +560,6 @@ function ChatContent() {
     await signOut({ callbackUrl: "/login" });
   }
 
-  const depleted = tokenState ? tokenState.tokens < config.costPerMessage : false;
-  const lowTokens = tokenState ? !depleted && tokenState.tokens < tokenState.dailyLimit * 0.25 : false;
   const userName = session?.user?.name ?? "User";
   const avatarUrl = session?.user?.image;
   const grouped = groupByDate(history);
@@ -678,34 +599,6 @@ function ChatContent() {
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/8 shrink-0">
           <span className="text-base font-black tracking-tight text-white">BRUTAL<span className="text-white/25">.</span></span>
           <button onClick={() => router.push("/")} className="text-xs text-white/30 hover:text-white transition-colors cursor-pointer">← Home</button>
-        </div>
-
-        {/* Plan + tokens */}
-        <div className="px-5 py-3 border-b border-white/8 shrink-0">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-black">{config.name}</span>
-              <span className="text-[10px] text-white/30">{config.price}</span>
-            </div>
-            <button onClick={() => router.push("/paywall")} className="text-[10px] text-white/30 hover:text-white/60 underline underline-offset-2 transition-colors cursor-pointer">Upgrade</button>
-          </div>
-          {tokenState && (
-            <>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] text-white/35">Daily tokens</span>
-                <span className={`text-xs font-black ${tokenState.tokens <= 0 ? "text-red-400" : tokenState.tokens < tokenState.dailyLimit * 0.25 ? "text-yellow-400" : "text-white"}`}>
-                  {tokenState.tokens}<span className="text-[10px] text-white/25 font-normal"> / {tokenState.dailyLimit}</span>
-                </span>
-              </div>
-              <div className="w-full h-1 rounded-full bg-white/8 overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${tokenState.tokens <= 0 ? "bg-red-500" : tokenState.tokens < tokenState.dailyLimit * 0.25 ? "bg-yellow-400" : "bg-white"}`}
-                  style={{ width: `${Math.max(0, (tokenState.tokens / tokenState.dailyLimit) * 100)}%` }}
-                />
-              </div>
-              <p className="text-[9px] text-white/20 mt-1">{config.costPerMessage} tokens/msg · resets midnight</p>
-            </>
-          )}
         </div>
 
         {/* New chat button */}
@@ -787,16 +680,6 @@ function ChatContent() {
             <span className="text-sm font-semibold text-white truncate">Brutal AI</span>
             <span className="text-xs text-white/30 hidden sm:block shrink-0">— Business & Landing Page Expert</span>
           </div>
-
-          {/* Token badge */}
-          {tokenState && (
-            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-semibold shrink-0 ${depleted ? "border-red-500/30 bg-red-500/5 text-red-400" : "border-white/10 bg-white/5 text-white/55"}`}>
-              <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
-              </svg>
-              {tokenState.tokens} tokens
-            </div>
-          )}
         </header>
 
         {/* Messages */}
@@ -822,34 +705,12 @@ function ChatContent() {
           </div>
         )}
 
-        {/* Low tokens nudge — fires before depletion, not after */}
-        {lowTokens && tier === "basic" && (
-          <div className="mx-4 mb-2 px-4 py-3 rounded-xl bg-white/3 border border-white/10 text-center">
-            <p className="text-xs text-white/50 mb-2">
-              ⚡ {Math.floor(tokenState!.tokens / config.costPerMessage)} messages left today. Pro gives you 5x more.
-            </p>
-            <button onClick={() => router.push("/paywall")} className="text-xs font-semibold text-white underline underline-offset-2 hover:no-underline cursor-pointer">
-              Upgrade to Pro →
-            </button>
-          </div>
-        )}
-
-        {/* Depleted banner */}
-        {depleted && (
-          <div className="mx-4 mb-2 px-4 py-3 rounded-xl bg-white/3 border border-white/10 text-center">
-            <p className="text-xs text-white/50 mb-2">🌙 You&apos;ve used all your tokens for today. They reset at midnight.</p>
-            <button onClick={() => router.push("/paywall")} className="text-xs font-semibold text-white underline underline-offset-2 hover:no-underline cursor-pointer">
-              Upgrade for more tokens →
-            </button>
-          </div>
-        )}
-
         {/* Input area */}
         <div className="px-4 pb-6 pt-2 shrink-0" style={{ background: "rgba(8,8,8,0.92)", backdropFilter: "blur(20px)" }}>
           <div className="max-w-3xl mx-auto">
             <form onSubmit={handleSend}>
               <div
-                className={`flex items-end gap-3 rounded-2xl border p-3 transition-all duration-200 ${depleted ? "border-white/5 bg-white/[0.02] opacity-60" : "border-white/10 bg-white/[0.04] focus-within:border-white/20"}`}
+                className="flex items-end gap-3 rounded-2xl border border-white/10 bg-white/[0.04] focus-within:border-white/20 p-3 transition-all duration-200"
                 style={{ backdropFilter: "blur(12px)" }}
               >
                 <textarea
@@ -863,8 +724,8 @@ function ChatContent() {
                     e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px";
                   }}
                   onKeyDown={handleKeyDown}
-                  disabled={depleted || isTyping}
-                  placeholder={depleted ? "Tokens depleted — resets at midnight" : "Ask anything about your business or paste a URL…"}
+                  disabled={isTyping}
+                  placeholder="Ask anything about your business or paste a URL…"
                   className="flex-1 bg-transparent text-sm text-white placeholder-white/20 resize-none focus:outline-none leading-relaxed min-h-[24px] max-h-[160px] disabled:opacity-40"
                   style={{ scrollbarWidth: "none" }}
                 />
@@ -872,7 +733,7 @@ function ChatContent() {
                   id="chat-send-btn"
                   type={isTyping ? "button" : "submit"}
                   onClick={isTyping ? handleStopGenerating : undefined}
-                  disabled={!isTyping && (!input.trim() || depleted)}
+                  disabled={!isTyping && !input.trim()}
                   title={isTyping ? "Stop generating" : "Send"}
                   className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all duration-200 bg-white text-black hover:bg-white/90 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                 >
@@ -886,7 +747,7 @@ function ChatContent() {
                 </button>
               </div>
               <p className="text-[10px] text-white/15 text-center mt-2">
-                Enter to send · Shift+Enter for new line · {config.costPerMessage} tokens/message
+                Enter to send · Shift+Enter for new line
               </p>
             </form>
           </div>

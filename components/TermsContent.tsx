@@ -21,25 +21,18 @@ export default function TermsContent() {
         old enough to legally enter into this agreement in your country.
       </p>
       <p>
-        <strong className="text-white/80">3. Plans, Billing &amp; Refunds</strong>
+        <strong className="text-white/80">3. Free Service</strong>
         <br />
-        Paid plans (currently Pro and Max) are charged through Razorpay for a
-        fixed period — 30 days for monthly plans, 365 days for annual —
-        rather than an auto-renewing subscription. Access does not
-        automatically continue after that period; you&apos;ll need to pay
-        again to keep it. Daily token/credit allowances reset at midnight and
-        don&apos;t roll over. Because access is granted immediately on
-        payment, purchases are generally non-refundable, except where
-        required by law or at our discretion for a genuine service failure —
-        contact us and we&apos;ll look at it case by case.
+        Brutal Roaster is currently free to use. We don&apos;t charge for
+        access, and we may show ads to support the service.
       </p>
       <p>
         <strong className="text-white/80">4. Acceptable Use</strong>
         <br />
         Don&apos;t use Brutal Roaster to scrape or roast pages you don&apos;t
         have the right to analyze for an unlawful purpose, to abuse or
-        overload the service, to attempt to bypass usage limits or paywalls,
-        or to resell access without our written permission.
+        overload the service, or to resell access without our written
+        permission.
       </p>
       <p>
         <strong className="text-white/80">5. Your Content</strong>
@@ -53,8 +46,8 @@ export default function TermsContent() {
         <strong className="text-white/80">6. Termination</strong>
         <br />
         You can delete your account at any time from your account menu. We
-        may suspend or terminate accounts that violate these terms, abuse the
-        service, or attempt fraudulent payments.
+        may suspend or terminate accounts that violate these terms or abuse
+        the service.
       </p>
       <p>
         <strong className="text-white/80">7. No Warranty &amp; Limitation of Liability</strong>

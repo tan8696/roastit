@@ -41,53 +41,8 @@ function BoardroomSkeleton() {
   );
 }
 
-// ─── Credit System (mirrors /chat/page.tsx) ────────────────────────────────
-const TIER_CONFIG = {
-  basic: { name: "Pro", price: "$1/mo", dailyTokens: 100 },
-  pro: { name: "Max", price: "$5/mo", dailyTokens: 500 },
-} as const;
-type Tier = keyof typeof TIER_CONFIG;
-
-interface CreditState {
-  tier: Tier;
-  tokens: number;
-  dailyLimit: number;
-  lastReset: string;
-}
 function getTodayStr() {
   return new Date().toISOString().slice(0, 10);
-}
-function loadCreditState(tier: Tier): CreditState {
-  const today = getTodayStr();
-  const config = TIER_CONFIG[tier];
-  try {
-    const raw = localStorage.getItem("brutal_tokens");
-    if (raw) {
-      const saved: CreditState = JSON.parse(raw);
-      if (saved.lastReset !== today || saved.tier !== tier) {
-        const fresh = {
-          tier,
-          tokens: config.dailyTokens,
-          dailyLimit: config.dailyTokens,
-          lastReset: today,
-        };
-        localStorage.setItem("brutal_tokens", JSON.stringify(fresh));
-        return fresh;
-      }
-      return saved;
-    }
-  } catch {}
-  const fresh = {
-    tier,
-    tokens: config.dailyTokens,
-    dailyLimit: config.dailyTokens,
-    lastReset: today,
-  };
-  localStorage.setItem("brutal_tokens", JSON.stringify(fresh));
-  return fresh;
-}
-function saveCreditState(state: CreditState) {
-  localStorage.setItem("brutal_tokens", JSON.stringify(state));
 }
 
 // ─── Session History ──────────────────────────────────────────────────────────
@@ -98,21 +53,17 @@ type BoardroomResult = {
   investor: string;
   judge: string;
   suggestedQuestions: string[];
-  creditsUsed: number;
-  websiteContext: boolean;
 };
 type AnswerResult = {
   type: "answer";
   reply: string;
   suggestedQuestions: string[];
-  creditsUsed: number;
 };
 type SessionResult = BoardroomResult | AnswerResult;
 
 interface BoardSession {
   id: string;
   title: string;
-  tier: Tier;
   userInput: string;
   websiteUrl?: string;
   result: SessionResult;
@@ -425,7 +376,6 @@ function HistoryItem({
         </p>
         <p className="text-[10px] text-white/25 mt-0.5">
           {isBoardroom ? "Full boardroom" : "Quick answer"}
-          {session.result.creditsUsed > 0 && ` · −${session.result.creditsUsed} credits`}
         </p>
       </div>
       {hovering && (
@@ -443,154 +393,17 @@ function HistoryItem({
   );
 }
 
-// ─── Paywall Modal ─────────────────────────────────────────────────────────────
-const PAYWALL_TIERS = [
-  {
-    id: "basic",
-    name: "Pro",
-    price: "$1",
-    badge: "Most Popular",
-    badgeStyle: "bg-white text-black",
-    description: "100 credits / day · 10 per session",
-    features: ["Full boardroom sessions", "Landing page roasts", "Business Q&A", "Email support"],
-    cta: "Get Pro →",
-    ctaStyle: "bg-white text-black hover:bg-white/90",
-  },
-  {
-    id: "pro",
-    name: "Max",
-    price: "$5",
-    badge: "Best Value",
-    badgeStyle: "bg-white/10 text-white border border-white/15",
-    description: "500 credits / day · 5 per session",
-    features: ["Everything in Pro", "~100 sessions / day", "Priority support", "Unlimited roasts"],
-    cta: "Go Max →",
-    ctaStyle: "bg-white/10 border border-white/20 text-white hover:bg-white/15",
-  },
-];
-
-function PaywallModal({
-  onClose,
-  onUpgrade,
-}: {
-  onClose: () => void;
-  onUpgrade: (tier: string) => void;
-}) {
-  const overlayRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center"
-      style={{ background: "rgba(0,0,0,0.82)", backdropFilter: "blur(12px)" }}
-      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
-    >
-      <div
-        className="relative w-full max-w-2xl mx-4 mb-4 sm:mb-0 rounded-2xl border border-white/12 overflow-hidden"
-        style={{
-          background: "rgba(10,10,10,0.98)",
-          backdropFilter: "blur(28px)",
-          boxShadow: "0 40px 100px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.06)",
-        }}
-      >
-        {/* Violet glow top border */}
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent" />
-
-        {/* Header */}
-        <div className="flex items-start justify-between px-6 py-5 border-b border-white/8">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-lg">🌙</span>
-              <h2 className="text-base font-black text-white tracking-tight">You&apos;re out of credits</h2>
-            </div>
-            <p className="text-xs text-white/40 leading-relaxed">
-              Your daily credits have been used up. They reset at midnight — or upgrade now to keep going.
-            </p>
-          </div>
-          <button
-            id="paywall-modal-close-btn"
-            onClick={onClose}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-white/30 hover:text-white hover:bg-white/8 transition-all cursor-pointer shrink-0 ml-4"
-          >
-            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Plans */}
-        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {PAYWALL_TIERS.map((t) => (
-            <div
-              key={t.id}
-              className={`rounded-xl border p-5 flex flex-col ${
-                t.id === "basic" ? "border-white/20 bg-white/5" : "border-white/10 bg-white/2"
-              }`}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${t.badgeStyle}`}>
-                  {t.badge}
-                </span>
-                <span className="text-xl font-black text-white">{t.price}<span className="text-xs text-white/30 font-normal">/mo</span></span>
-              </div>
-              <p className="text-sm font-bold text-white mb-1">{t.name}</p>
-              <p className="text-[11px] text-white/35 mb-4 leading-relaxed">{t.description}</p>
-              <ul className="flex flex-col gap-1.5 mb-5 flex-1">
-                {t.features.map((f) => (
-                  <li key={f} className="flex items-center gap-2 text-xs text-white/55">
-                    <svg className="w-3 h-3 shrink-0 text-white/30" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                      <path d="M20 6L9 17l-5-5" />
-                    </svg>
-                    {f}
-                  </li>
-                ))}
-              </ul>
-              <button
-                id={`paywall-${t.id}-btn`}
-                onClick={() => onUpgrade(t.id)}
-                className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all duration-200 active:scale-[0.97] cursor-pointer ${t.ctaStyle}`}
-              >
-                {t.cta}
-              </button>
-            </div>
-          ))}
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 pb-5 text-center">
-          <p className="text-[11px] text-white/20">Credits reset daily at midnight · Cancel anytime</p>
-          <button
-            onClick={onClose}
-            className="mt-2 text-[11px] text-white/25 hover:text-white/50 transition-colors cursor-pointer underline underline-offset-2"
-          >
-            Continue with free (wait until midnight)
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Main Content ─────────────────────────────────────────────────────────────
 function BoardroomContent() {
   const router = useRouter();
   const { data: session, status } = useSession();
 
   const [authed, setAuthed] = useState(false);
-  const [tier, setTier] = useState<Tier>("basic");
-  const [creditState, setCreditState] = useState<CreditState | null>(null);
   const [input, setInput] = useState("");
   const [activeInput, setActiveInput] = useState<string>("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isProUser, setIsProUser] = useState<boolean>(false);
 
   const [loadingStage, setLoadingStage] = useState("routing");
   const [error, setError] = useState("");
@@ -598,7 +411,6 @@ function BoardroomContent() {
   const [history, setHistory] = useState<BoardSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [showPaywall, setShowPaywall] = useState(false);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
@@ -616,32 +428,11 @@ function BoardroomContent() {
     if (status === "authenticated") setAuthed(true);
   }, [status, router]);
 
-  // Init credits + history — tier and pro status come from what was
-  // actually paid for (server-checked), not the URL: ?tier=pro used to
-  // hand out Pro-level limits to anyone who typed it in.
+  // Load history once signed in
   useEffect(() => {
     if (!authed && status !== "authenticated") return;
-
-    (async () => {
-      let resolvedTier: Tier = "basic";
-      try {
-        const res = await fetch("/api/user/entitlement");
-        const data = await res.json();
-        if (!data.active) {
-          router.replace("/paywall");
-          return;
-        }
-        resolvedTier = data.tier === "pro" ? "pro" : "basic";
-        setIsProUser(true);
-      } catch {
-        router.replace("/paywall");
-        return;
-      }
-      setTier(resolvedTier);
-      setCreditState(loadCreditState(resolvedTier));
-      setHistory(loadHistory());
-    })();
-  }, [authed, status, router]);
+    setHistory(loadHistory());
+  }, [authed, status]);
 
   // Scroll to result
   useEffect(() => {
@@ -651,13 +442,12 @@ function BoardroomContent() {
   }, [activeResult]);
 
   const saveSession = useCallback(
-    (id: string, userInput: string, url: string, result: SessionResult, t: Tier) => {
+    (id: string, userInput: string, url: string, result: SessionResult) => {
       const title =
         userInput.length > 45 ? userInput.slice(0, 45) + "…" : userInput;
       const newSession: BoardSession = {
         id,
         title,
-        tier: t,
         userInput,
         websiteUrl: url || undefined,
         result,
@@ -676,12 +466,6 @@ function BoardroomContent() {
     const text = input.trim();
     if (!text || isLoading) return;
 
-    // Guard: if already at 0 credits, show paywall immediately (don’t call API)
-    if (creditState && creditState.tokens <= 0) {
-      setShowPaywall(true);
-      return;
-    }
-
     setError("");
     setIsLoading(true);
     setLoadingStage("routing");
@@ -694,7 +478,6 @@ function BoardroomContent() {
     let answerText = "";
     let resultType: "boardroom" | "answer" | null = null;
     let hasWebsiteFlag = false;
-    let finalCreditsUsed = 0;
     let finalSuggested: string[] = [];
     let streamError = "";
     const controller = new AbortController();
@@ -730,7 +513,7 @@ function BoardroomContent() {
 
         for (const line of lines) {
           if (!line.trim()) continue;
-          let evt: { t: string; v?: string; agent?: string; hasWebsite?: boolean; creditsUsed?: number; suggestedQuestions?: string[]; websiteContext?: boolean };
+          let evt: { t: string; v?: string; agent?: string; hasWebsite?: boolean; suggestedQuestions?: string[]; websiteContext?: boolean };
           try { evt = JSON.parse(line); } catch { continue; }
 
           if (evt.t === "error") {
@@ -739,7 +522,7 @@ function BoardroomContent() {
             resultType = "answer";
             answerText = evt.v ?? "";
             setIsLoading(false);
-            setActiveResult({ type: "answer", reply: answerText, suggestedQuestions: [], creditsUsed: 1 });
+            setActiveResult({ type: "answer", reply: answerText, suggestedQuestions: [] });
           } else if (evt.t === "phase") {
             if (evt.v === "board") {
               resultType = "boardroom";
@@ -747,7 +530,7 @@ function BoardroomContent() {
               setIsLoading(false);
               setActiveResult({
                 type: "boardroom", believer: "", skeptic: "", investor: "", judge: "",
-                suggestedQuestions: [], creditsUsed: 0, websiteContext: hasWebsiteFlag,
+                suggestedQuestions: [],
               });
             } else {
               setLoadingStage(evt.v as string);
@@ -767,7 +550,6 @@ function BoardroomContent() {
               prev && prev.type === "boardroom" ? { ...prev, judge: judgeText } : prev
             );
           } else if (evt.t === "done") {
-            finalCreditsUsed = evt.creditsUsed ?? (resultType === "answer" ? 1 : 0);
             finalSuggested = evt.suggestedQuestions ?? [];
             if (resultType === "boardroom" && evt.websiteContext !== undefined) {
               hasWebsiteFlag = evt.websiteContext;
@@ -784,29 +566,17 @@ function BoardroomContent() {
           ? {
               type: "boardroom", believer: believerText, skeptic: skepticText,
               investor: investorText, judge: judgeText, suggestedQuestions: finalSuggested,
-              creditsUsed: finalCreditsUsed, websiteContext: hasWebsiteFlag,
             }
-          : { type: "answer", reply: answerText, suggestedQuestions: finalSuggested, creditsUsed: finalCreditsUsed };
+          : { type: "answer", reply: answerText, suggestedQuestions: finalSuggested };
 
       setActiveResult(finalResult);
       setActiveInput(text);
 
-      // Deduct credits
-      const newTokens = Math.max(0, creditState!.tokens - finalResult.creditsUsed);
-      const newState = { ...creditState!, tokens: newTokens };
-      setCreditState(newState);
-      saveCreditState(newState);
-
       // Save to history
       const sid = `board_${Date.now()}`;
       setActiveSessionId(sid);
-      saveSession(sid, text, websiteUrl, finalResult, tier);
+      saveSession(sid, text, websiteUrl, finalResult);
       setInput("");
-
-      // Show paywall AFTER result renders if credits are now depleted
-      if (newTokens <= 0) {
-        setTimeout(() => setShowPaywall(true), 1800);
-      }
     } catch (err) {
       if (controller.signal.aborted) {
         // User hit "stop" — leave whatever partial board/agent text already
@@ -862,7 +632,6 @@ function BoardroomContent() {
     await signOut({ callbackUrl: "/login" });
   }
 
-  const depleted = creditState ? creditState.tokens < 1 : false;
   const userName = session?.user?.name ?? "User";
   const avatarUrl = session?.user?.image;
   const grouped = groupByDate(history);
@@ -873,13 +642,6 @@ function BoardroomContent() {
 
   return (
     <div className="relative flex h-screen bg-black overflow-hidden">
-      {/* Paywall Modal — renders over results after credits hit 0 */}
-      {showPaywall && (
-        <PaywallModal
-          onClose={() => setShowPaywall(false)}
-          onUpgrade={() => router.push("/paywall")}
-        />
-      )}
       {/* Scanner background */}
       <div style={{ position: "fixed", inset: 0, zIndex: 0, opacity: 0.25 }}>
         <Scanner
@@ -925,44 +687,6 @@ function BoardroomContent() {
           >
             ← Home
           </button>
-        </div>
-
-        {/* Credits */}
-        <div className="px-5 py-3 border-b border-white/8 shrink-0">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-black">
-                {TIER_CONFIG[tier].name}
-              </span>
-              <span className="text-[10px] text-white/30">{TIER_CONFIG[tier].price}</span>
-            </div>
-            <button
-              onClick={() => router.push("/paywall")}
-              className="text-[10px] text-white/30 hover:text-white/60 underline underline-offset-2 transition-colors cursor-pointer"
-            >
-              Upgrade
-            </button>
-          </div>
-          {creditState && (
-            <>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] text-white/35">Daily credits</span>
-                <span className={`text-xs font-black ${creditState.tokens <= 0 ? "text-red-400" : creditState.tokens < creditState.dailyLimit * 0.25 ? "text-yellow-400" : "text-white"}`}>
-                  {creditState.tokens}
-                  <span className="text-[10px] text-white/25 font-normal"> / {creditState.dailyLimit}</span>
-                </span>
-              </div>
-              <div className="w-full h-1 rounded-full bg-white/8 overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${creditState.tokens <= 0 ? "bg-red-500" : creditState.tokens < creditState.dailyLimit * 0.25 ? "bg-yellow-400" : "bg-violet-400"}`}
-                  style={{ width: `${Math.max(0, (creditState.tokens / creditState.dailyLimit) * 100)}%` }}
-                />
-              </div>
-              <p className="text-[9px] text-white/20 mt-1">
-                Dynamic cost: 1–17 credits/session · resets midnight
-              </p>
-            </>
-          )}
         </div>
 
         {/* Switch to Chat */}
@@ -1055,15 +779,6 @@ function BoardroomContent() {
               <span className="text-xs text-white/30 ml-2 hidden sm:inline">5 AI agents · Believer · Skeptic · Investor · Judge</span>
             </div>
           </div>
-
-          {creditState && (
-            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-semibold shrink-0 ${depleted ? "border-red-500/30 bg-red-500/5 text-red-400" : "border-violet-500/20 bg-violet-500/5 text-violet-300"}`}>
-              <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
-              </svg>
-              {creditState.tokens} credits
-            </div>
-          )}
         </header>
 
         <div className="flex-1 max-w-4xl mx-auto w-full px-4 py-8">
@@ -1083,22 +798,12 @@ function BoardroomContent() {
               <p className="text-sm text-white/35 leading-relaxed max-w-lg mb-6">
                 Describe your business idea. The Router classifies it, then three board members attack it simultaneously — and the Judge delivers the final verdict.
               </p>
-
-              {/* Massive Upgrade to Pro Button */}
-              {!isProUser && session?.user?.id && (
-                <button
-                  onClick={() => router.push("/paywall")}
-                  className="inline-block w-full text-center px-8 py-4 mb-8 rounded-xl font-black text-lg bg-gradient-to-r from-red-600 to-red-500 text-white shadow-[0_0_30px_rgba(220,38,38,0.5)] hover:shadow-[0_0_50px_rgba(220,38,38,0.7)] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] border border-red-400/50 cursor-pointer"
-                >
-                  ⚡ UPGRADE TO PRO NOW ⚡
-                </button>
-              )}
             </div>
 
             {/* Input form */}
             <form onSubmit={handleSubmit}>
               <div
-                className={`rounded-2xl border p-4 transition-all duration-200 ${depleted ? "border-white/5 bg-white/[0.02] opacity-60" : "border-white/10 bg-white/[0.03] focus-within:border-violet-500/30"}`}
+                className="rounded-2xl border border-white/10 bg-white/[0.03] focus-within:border-violet-500/30 p-4 transition-all duration-200"
                 style={{ backdropFilter: "blur(12px)" }}
               >
                 <textarea
@@ -1112,12 +817,9 @@ function BoardroomContent() {
                     e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
                   }}
                   onKeyDown={handleKeyDown}
-                  disabled={depleted || isLoading}
-                  placeholder={
-                    depleted
-                      ? "Credits depleted — resets at midnight"
-                      : "Describe your business idea… or ask the board a general question.\nE.g. 'An app that connects pet owners with on-demand dog trainers in their city.'"
-                  }
+                  disabled={isLoading}
+                  placeholder="Describe your business idea… or ask the board a general question.
+E.g. 'An app that connects pet owners with on-demand dog trainers in their city.'"
                   className="w-full bg-transparent text-sm text-white placeholder-white/20 resize-none focus:outline-none leading-relaxed min-h-[72px] max-h-[200px] disabled:opacity-40"
                   style={{ scrollbarWidth: "none" }}
                 />
@@ -1182,7 +884,7 @@ function BoardroomContent() {
                     id="boardroom-submit-btn"
                     type={isLoading ? "button" : "submit"}
                     onClick={isLoading ? handleStopGenerating : undefined}
-                    disabled={!isLoading && (!input.trim() || depleted)}
+                    disabled={!isLoading && !input.trim()}
                     className="flex items-center gap-2 px-5 py-2 rounded-xl font-bold text-sm text-black bg-white hover:bg-white/90 disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.97] transition-all duration-200 cursor-pointer"
                   >
                     {isLoading ? (
@@ -1227,26 +929,19 @@ function BoardroomContent() {
                 <div className="flex-1">
                   <div className="rounded-2xl bg-white text-black px-4 py-3 text-sm leading-relaxed inline-block max-w-full">
                     <p className="font-medium whitespace-pre-wrap">{activeInput}</p>
-                    {activeResult.type === "boardroom" &&
-                      (activeResult as BoardroomResult).websiteContext &&
-                      websiteUrl && (
-                        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-black/40">
-                          <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
-                            <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
-                          </svg>
-                          {websiteUrl}
-                        </div>
-                      )}
-                  </div>
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <span className="text-[10px] text-white/20">
-                      {activeResult.creditsUsed} credits used
-                    </span>
-                    {activeResult.type === "boardroom" && (
-                      <span className="text-[10px] text-violet-400/50">· Full boardroom session</span>
+                    {activeResult.type === "boardroom" && websiteUrl && (
+                      <div className="mt-2 flex items-center gap-1.5 text-[11px] text-black/40">
+                        <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+                          <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+                        </svg>
+                        {websiteUrl}
+                      </div>
                     )}
                   </div>
+                  {activeResult.type === "boardroom" && (
+                    <p className="mt-1.5 text-[10px] text-violet-400/50">Full boardroom session</p>
+                  )}
                 </div>
               </div>
 
@@ -1270,12 +965,10 @@ function BoardroomContent() {
                     </div>
 
                     {/* Visual separator before Judge */}
-                    {!isProUser && (
-                      <div className="my-6">
-                        <AdBanner />
-                      </div>
-                    )}
-                    
+                    <div className="my-6">
+                      <AdBanner />
+                    </div>
+
                     <div className="flex items-center gap-3">
                       <div className="flex-1 h-px bg-gradient-to-r from-transparent via-violet-500/30 to-transparent" />
                       <div className="flex items-center gap-2 px-3 py-1 rounded-full border border-violet-500/20 bg-violet-500/5">

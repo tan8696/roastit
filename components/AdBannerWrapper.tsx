@@ -12,13 +12,13 @@ import AdBanner from "@/components/AdBanner";
 // we forget to update) safely defaults to no ad.
 const ADS_ENABLED_ON = ["/", "/about", "/contact", "/privacy", "/terms"];
 
-export default function AdBannerWrapper({ isPro }: { isPro: boolean }) {
+export default function AdBannerWrapper() {
   const pathname = usePathname();
   const clientId = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID;
   const slotId = process.env.NEXT_PUBLIC_ADSENSE_SLOT_ID;
   const isConfigured = Boolean(clientId && slotId);
 
-  if (isPro || !isConfigured) return null;
+  if (!isConfigured) return null;
   if (!ADS_ENABLED_ON.includes(pathname)) return null;
 
   return (

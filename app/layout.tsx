@@ -3,8 +3,6 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { SessionProvider } from "next-auth/react";
 import Script from "next/script";
-import { auth } from "@/auth";
-import { createClient } from "@supabase/supabase-js";
 import AdBannerWrapper from "@/components/AdBannerWrapper";
 
 const inter = Inter({
@@ -40,6 +38,9 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Brutal Roaster" }],
   creator: "Brutal Roaster",
+  alternates: {
+    canonical: SITE_URL,
+  },
   robots: {
     index: true,
     follow: true,
@@ -67,38 +68,12 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await auth();
-  let isPro = false;
-
-  if (session?.user?.id) {
-    // Check Supabase
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      );
-      const { data } = await supabase
-        .from("profiles") // assuming table is profiles
-        .select("is_pro_user, tier_expires_at")
-        .eq("id", session.user.id)
-        .single();
-
-      if (
-        data?.is_pro_user &&
-        data?.tier_expires_at &&
-        new Date(data.tier_expires_at).getTime() > Date.now()
-      ) {
-        isPro = true;
-      }
-    }
-  }
-
   const adsenseClientId = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID;
 
   return (
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <head>
-        {!isPro && adsenseClientId && (
+        {adsenseClientId && (
           <Script
             id="adsbygoogle-init"
             strategy="afterInteractive"
@@ -110,7 +85,7 @@ export default async function RootLayout({
       <body className="font-sans bg-black text-white antialiased">
         <SessionProvider>
           {children}
-          <AdBannerWrapper isPro={isPro} />
+          <AdBannerWrapper />
         </SessionProvider>
       </body>
     </html>

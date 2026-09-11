@@ -1,21 +1,19 @@
 "use client";
 
 import { FormEvent, useState, useEffect, useRef } from "react";
-import Markdown from "react-markdown";
+import type { RoastResult } from "@/lib/schemas/roast";
+import { RoastResultCard } from "@/components/RoastResultCard";
 
-type RoastResponse = {
-  roast?: string;
-  error?: string;
-};
+type RoastApiResponse = RoastResult & { error?: string };
 
 const LOADING_PHASES = [
   "Extracting weak code...",
   "Scanning conversion killers...",
   "Identifying revenue leaks...",
   "Auditing trust signals...",
+  "Running Lighthouse audit...",
   "Cross-referencing UX patterns...",
   "Compiling brutal truths...",
-  "Drafting the teardown...",
 ];
 
 function TerminalLoader() {
@@ -55,7 +53,7 @@ function TerminalLoader() {
       {/* Terminal body */}
       <div className="p-6 font-mono text-sm min-h-[180px]">
         <div className="text-zinc-500 mb-4 text-xs">
-          $ brutal-roaster analyze --mode=ruthless --output=markdown
+          $ brutal-roaster analyze --mode=ruthless --output=json
         </div>
         <div className="flex items-start gap-2">
           <span className="text-red-400 shrink-0">▶</span>
@@ -78,9 +76,34 @@ function TerminalLoader() {
   );
 }
 
+function ShareLink({ slug }: { slug: string }) {
+  const [copied, setCopied] = useState(false);
+  const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/r/${slug}` : `/r/${slug}`;
+
+  function handleShare() {
+    navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <button
+      id="roast-share-btn"
+      onClick={handleShare}
+      className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-1.5 cursor-pointer"
+    >
+      <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+        <path d="M8.59 13.51l6.83 3.98M15.41 6.51L8.59 10.49" />
+      </svg>
+      {copied ? "Link copied" : "Share"}
+    </button>
+  );
+}
+
 export function RoastForm() {
   const [url, setUrl] = useState("");
-  const [roast, setRoast] = useState("");
+  const [result, setResult] = useState<RoastResult | null>(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const resultRef = useRef<HTMLDivElement>(null);
@@ -88,7 +111,7 @@ export function RoastForm() {
   async function handleRoast(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    setRoast("");
+    setResult(null);
     setIsLoading(true);
 
     try {
@@ -98,17 +121,13 @@ export function RoastForm() {
         body: JSON.stringify({ url }),
       });
 
-      const data = (await response.json()) as RoastResponse;
+      const data = (await response.json()) as RoastApiResponse;
 
       if (!response.ok || data.error) {
         throw new Error(data.error ?? "The roast request failed.");
       }
 
-      if (!data.roast) {
-        throw new Error("The API returned no roast.");
-      }
-
-      setRoast(data.roast);
+      setResult(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -118,12 +137,12 @@ export function RoastForm() {
 
   // Auto-scroll to result
   useEffect(() => {
-    if (roast && resultRef.current) {
+    if (result && resultRef.current) {
       setTimeout(() => {
         resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 100);
     }
-  }, [roast]);
+  }, [result]);
 
   return (
     <div className="flex flex-col gap-8 w-full">
@@ -187,71 +206,24 @@ export function RoastForm() {
       {isLoading && <TerminalLoader />}
 
       {/* Result */}
-      {roast && !isLoading && (
-        <div ref={resultRef} className="fade-in-up">
-          {/* Report header */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-xs font-semibold tracking-widest uppercase text-red-400">
-                Teardown Report
-              </span>
+      {result && !isLoading && (
+        <div ref={resultRef}>
+          <RoastResultCard result={result} />
+
+          {result.shareSlug && (
+            <div className="mt-3 flex justify-end">
+              <ShareLink slug={result.shareSlug} />
             </div>
-            <button
-              id="roast-copy-btn"
-              onClick={() => navigator.clipboard.writeText(roast)}
-              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <rect x="9" y="9" width="13" height="13" rx="2" />
-                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-              </svg>
-              Copy
-            </button>
-          </div>
+          )}
 
-          {/* Glowing report card */}
-          <div
-            className="rounded-2xl border border-red-500/20 overflow-hidden glow-pulse"
-            style={{
-              background: "rgba(255,255,255,0.03)",
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)",
-            }}
-          >
-            {/* Top accent bar */}
-            <div className="h-px bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
-
-            <div className="p-8">
-              <article className="prose prose-invert prose-sm max-w-none
-                prose-headings:text-white prose-headings:font-bold
-                prose-h2:text-xl prose-h2:mt-8 prose-h2:mb-4
-                prose-h3:text-base prose-h3:text-zinc-200
-                prose-p:text-zinc-300 prose-p:leading-relaxed
-                prose-li:text-zinc-300
-                prose-strong:text-white prose-strong:font-semibold
-                prose-ul:space-y-1
-                prose-a:text-red-400 prose-a:no-underline hover:prose-a:underline
-                prose-code:text-red-300 prose-code:bg-red-500/10 prose-code:rounded prose-code:px-1
-                [&>*:first-child]:mt-0">
-                <Markdown>{roast}</Markdown>
-              </article>
-            </div>
-
-            {/* Bottom watermark */}
-            <div className="flex items-center justify-between px-8 py-4 border-t border-white/5 bg-white/[0.02]">
-              <span className="text-xs text-zinc-600">Generated by Brutal Roaster AI</span>
-            </div>
-          </div>
-
-          {/* That was the free preview — push toward signup for more */}
+          {/* Push toward the full chat/boardroom tools — free, just needs an account */}
           <div className="mt-6 rounded-xl border border-white/10 p-5 text-center" style={{ background: "rgba(255,255,255,0.02)" }}>
-            <p className="text-sm text-white/70 mb-3">That was your free roast. Get ~10 more a day for $1/mo.</p>
+            <p className="text-sm text-white/70 mb-3">Want to go deeper? Sign in for unlimited roasts and the AI chat & Boardroom — free.</p>
             <a
               href="/login"
               className="inline-block px-6 py-3 rounded-xl font-bold text-sm text-black bg-white hover:bg-white/90 transition-all duration-200"
             >
-              Get Started →
+              Sign In →
             </a>
           </div>
 
@@ -259,7 +231,7 @@ export function RoastForm() {
           <div className="mt-4 text-center">
             <button
               id="roast-again-btn"
-              onClick={() => { setRoast(""); setUrl(""); setError(""); }}
+              onClick={() => { setResult(null); setUrl(""); setError(""); }}
               className="text-sm text-zinc-500 hover:text-zinc-300 underline underline-offset-4 transition-colors cursor-pointer"
             >
               ← Roast another page

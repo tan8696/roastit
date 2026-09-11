@@ -292,17 +292,6 @@ function AccountMenu({
           {/* Menu items */}
           <div className="p-2">
             <a
-              href="/paywall"
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-white/60 hover:text-white hover:bg-white/5 transition-all duration-150 cursor-pointer"
-            >
-              <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <rect x="1" y="4" width="22" height="16" rx="2" />
-                <path d="M1 10h22" />
-              </svg>
-              Manage Subscription
-            </a>
-
-            <a
               href="mailto:rosterai@gmail.com"
               className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-white/60 hover:text-white hover:bg-white/5 transition-all duration-150 cursor-pointer"
             >
@@ -371,7 +360,7 @@ export default function DashboardHome() {
     }
     let normalized = url.trim();
     if (!/^https?:\/\//i.test(normalized)) normalized = "https://" + normalized;
-    router.push(`/paywall?url=${encodeURIComponent(normalized)}`);
+    router.push(`/chat?url=${encodeURIComponent(normalized)}`);
   }
 
   async function handleSignOut() {

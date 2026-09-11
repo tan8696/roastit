@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "type-check": "tsc --noEmit",
+    "test": "node lib/safeFetch.selftest.ts && node lib/schemas/roast.selftest.ts && node eval/scoring.selftest.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

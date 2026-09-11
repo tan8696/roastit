@@ -49,6 +49,7 @@ export const RoastResultSchema = RoastLlmSchema.extend({
   overallScore: z.number().min(0).max(100),
   deterministic: PageSpeedMetricsSchema.nullable(),
   cached: z.boolean().optional(),
+  shareSlug: z.string().optional(),
 });
 export type RoastResult = z.infer<typeof RoastResultSchema>;
 

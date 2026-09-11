@@ -1,13 +1,11 @@
-import crypto from "node:crypto";
 import { getRedis } from "@/lib/redis";
+import { hashUrl } from "@/lib/urlHash";
 import { RoastResultSchema, type RoastResult } from "@/lib/schemas/roast";
 
 const ROAST_CACHE_TTL_S = 60 * 60 * 24; // 24h — long enough to dedupe repeat traffic on a popular URL
 
 function cacheKeyFor(url: string): string {
-  const normalized = url.trim().toLowerCase().replace(/\/+$/, "");
-  const hash = crypto.createHash("sha256").update(normalized).digest("hex");
-  return `roast:${hash}`;
+  return `roast:${hashUrl(url)}`;
 }
 
 // Re-validates against the current schema on read — a cache entry written by

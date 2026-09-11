@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import { getCachedRoast, setCachedRoast } from "@/lib/roastCache";
 import { getPageSpeedMetrics } from "@/lib/pagespeed";
+import { saveSharedRoast } from "@/lib/sharedRoast";
 import {
   RoastLlmSchema,
   RoastResultSchema,
@@ -259,6 +260,11 @@ export async function POST(request: Request) {
     );
   }
 
-  await setCachedRoast(url, validated.data);
-  return NextResponse.json(validated.data);
+  // Best-effort — a Supabase hiccup shouldn't fail the roast itself, it just
+  // means no share link this time.
+  const shareSlug = (await saveSharedRoast(url, validated.data)) ?? undefined;
+  const finalResult = { ...validated.data, shareSlug };
+
+  await setCachedRoast(url, finalResult);
+  return NextResponse.json(finalResult);
 }

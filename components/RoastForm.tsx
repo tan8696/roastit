@@ -244,8 +244,19 @@ export function RoastForm() {
             </div>
           </div>
 
+          {/* That was the free preview — push toward signup for more */}
+          <div className="mt-6 rounded-xl border border-white/10 p-5 text-center" style={{ background: "rgba(255,255,255,0.02)" }}>
+            <p className="text-sm text-white/70 mb-3">That was your free roast. Get ~10 more a day for $1/mo.</p>
+            <a
+              href="/login"
+              className="inline-block px-6 py-3 rounded-xl font-bold text-sm text-black bg-white hover:bg-white/90 transition-all duration-200"
+            >
+              Get Started →
+            </a>
+          </div>
+
           {/* Roast again */}
-          <div className="mt-6 text-center">
+          <div className="mt-4 text-center">
             <button
               id="roast-again-btn"
               onClick={() => { setRoast(""); setUrl(""); setError(""); }}

@@ -32,12 +32,6 @@ function PaywallSkeleton() {
   );
 }
 
-declare global {
-  interface Window {
-    Razorpay: new (options: Record<string, unknown>) => { open: () => void };
-  }
-}
-
 // Mirrors app/api/razorpay/create-order/route.ts — for display only,
 // the server is the source of truth for what's actually charged.
 // Annual = 10x monthly (2 months free).
@@ -46,19 +40,12 @@ const TIER_PRICE_INR: Record<string, { monthly: string; annual: string }> = {
   pro: { monthly: "₹449", annual: "₹4,490" },
 };
 
-function loadRazorpayScript(): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (window.Razorpay) {
-      resolve(true);
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-}
+// ponytail: payments go through the hosted razorpay.me page instead of the
+// in-app Orders-API checkout below (create-order/verify routes are unused by
+// this page for now) — no webhook is wired to it, so access is granted
+// manually after payment. Upgrade path: point this at /api/razorpay/create-order
+// again once that flow is confirmed working end-to-end in production.
+const PAYMENT_LINK = "https://razorpay.me/@roastitai";
 
 const TIERS = [
   {
@@ -131,9 +118,7 @@ function PaywallContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const websiteUrl = searchParams.get("url") || "";
-  const { data: session, status } = useSession();
-  const [payingTier, setPayingTier] = useState<string | null>(null);
-  const [payError, setPayError] = useState("");
+  const { status } = useSession();
   const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
 
   useEffect(() => {
@@ -141,80 +126,6 @@ function PaywallContent() {
       router.replace("/login");
     }
   }, [router, status]);
-
-  async function handleUpgrade(tierId: string) {
-    if (!session?.user?.id) {
-      router.push("/login");
-      return;
-    }
-    setPayError("");
-    setPayingTier(tierId);
-
-    try {
-      const orderRes = await fetch("/api/razorpay/create-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tier: tierId, billing }),
-      });
-      const order = await orderRes.json();
-      if (!orderRes.ok) {
-        setPayError(order.error || "Could not start checkout.");
-        setPayingTier(null);
-        return;
-      }
-
-      const scriptLoaded = await loadRazorpayScript();
-      if (!scriptLoaded) {
-        setPayError("Could not load the payment widget. Check your connection and try again.");
-        setPayingTier(null);
-        return;
-      }
-
-      const razorpay = new window.Razorpay({
-        key: order.keyId,
-        amount: order.amount,
-        currency: order.currency,
-        order_id: order.orderId,
-        name: "Brutal Roaster",
-        description: `${tierId === "pro" ? "Max" : "Pro"} plan — ${billing === "annual" ? "12 months" : "30 days"}`,
-        prefill: {
-          name: session.user.name || undefined,
-          email: session.user.email || undefined,
-        },
-        theme: { color: "#ffffff" },
-        handler: async (response: {
-          razorpay_order_id: string;
-          razorpay_payment_id: string;
-          razorpay_signature: string;
-        }) => {
-          try {
-            const verifyRes = await fetch("/api/razorpay/verify", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(response),
-            });
-            const verifyData = await verifyRes.json();
-            if (!verifyRes.ok || !verifyData.success) {
-              setPayError(verifyData.error || "Payment verification failed. Contact support if you were charged.");
-              setPayingTier(null);
-              return;
-            }
-            router.push(`/chat${websiteUrl ? `?url=${encodeURIComponent(websiteUrl)}` : ""}`);
-          } catch {
-            setPayError("Payment verification failed. Contact support if you were charged.");
-            setPayingTier(null);
-          }
-        },
-        modal: {
-          ondismiss: () => setPayingTier(null),
-        },
-      });
-      razorpay.open();
-    } catch {
-      setPayError("Something went wrong starting checkout. Please try again.");
-      setPayingTier(null);
-    }
-  }
 
   if (status === "loading") {
     return <PaywallSkeleton />;
@@ -296,11 +207,6 @@ function PaywallContent() {
           <p className="text-white/40 text-base max-w-lg mx-auto mt-3">
             Unlock your full landing page teardown. Cancel anytime.
           </p>
-          {payError && (
-            <p className="mt-4 text-xs text-red-300 bg-red-500/8 border border-red-500/15 rounded-lg px-4 py-2 inline-block">
-              {payError}
-            </p>
-          )}
 
           {/* Billing toggle */}
           <div className="inline-flex items-center gap-1 mt-6 p-1 rounded-full border border-white/10 bg-white/5">
@@ -397,21 +303,36 @@ function PaywallContent() {
               )}
 
               {/* CTA */}
-              <button
-                id={`plan-${tier.id}-btn`}
-                disabled={tier.disabled || payingTier === tier.id}
-                onClick={() => !tier.disabled && handleUpgrade(tier.id)}
-                className={`w-full py-3 rounded-xl font-bold text-sm transition-all duration-200 disabled:opacity-60 disabled:cursor-wait ${tier.ctaStyle}`}
-              >
-                {payingTier === tier.id ? "Opening checkout…" : tier.cta}
-              </button>
+              {tier.disabled ? (
+                <button
+                  id={`plan-${tier.id}-btn`}
+                  disabled
+                  className={`w-full py-3 rounded-xl font-bold text-sm transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed ${tier.ctaStyle}`}
+                >
+                  {tier.cta}
+                </button>
+              ) : (
+                <a
+                  id={`plan-${tier.id}-btn`}
+                  href={PAYMENT_LINK}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`block text-center w-full py-3 rounded-xl font-bold text-sm transition-all duration-200 ${tier.ctaStyle}`}
+                >
+                  {tier.cta}
+                </a>
+              )}
             </div>
           ))}
         </div>
 
         {/* Footer note */}
-        <p className="text-center text-xs text-white/20 mt-10">
-          Secure checkout · Cancel anytime · No hidden fees
+        <p className="text-center text-xs text-white/30 mt-10 max-w-md mx-auto">
+          Opens Razorpay's secure payment page. After paying, email{" "}
+          <a href="mailto:rosterai@gmail.com" className="underline hover:text-white/60">
+            rosterai@gmail.com
+          </a>{" "}
+          from your account address with the plan you picked — we'll activate it shortly.
         </p>
       </div>
     </div>

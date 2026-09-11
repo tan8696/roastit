@@ -4,7 +4,11 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://roastitai.vercel.a
 
 export default function robots(): MetadataRoute.Robots {
   return {
-    rules: { userAgent: "*", allow: "/" },
+    rules: {
+      userAgent: "*",
+      allow: "/",
+      disallow: ["/api/", "/chat", "/boardroom", "/settings", "/paywall"],
+    },
     sitemap: `${SITE_URL}/sitemap.xml`,
   };
 }

@@ -14,6 +14,7 @@ import dynamic from "next/dynamic";
 import Markdown from "react-markdown";
 import AdBanner from "@/components/AdBanner";
 import { Skeleton } from "@/components/Skeleton";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 const Scanner = dynamic(() => import("@/components/Scanner"), { ssr: false });
 
@@ -226,12 +227,19 @@ function PersonaCard({
   index?: number;
 }) {
   const [visible, setVisible] = useState(false);
+  const [copied, setCopied] = useState(false);
   const p = PERSONAS[personaKey];
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), delay);
     return () => clearTimeout(t);
   }, [delay]);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
 
   const isJudge = personaKey === "judge";
 
@@ -270,6 +278,14 @@ function PersonaCard({
               </span>
             </div>
           </div>
+          {content && (
+            <button
+              onClick={handleCopy}
+              className="text-[10px] text-white/25 hover:text-white/60 transition-colors cursor-pointer shrink-0"
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
+          )}
         </div>
 
         {/* Card content — flex-1 so all cards fill the same height */}
@@ -283,6 +299,32 @@ function PersonaCard({
           </article>
         </div>
       </div>
+    </div>
+  );
+}
+
+function AnswerReply({ content }: { content: string }) {
+  const [copied, setCopied] = useState(false);
+  function handleCopy() {
+    navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+  return (
+    <div
+      className="flex-1 rounded-2xl rounded-tl-sm px-4 py-3 bg-white/5 border border-white/8 text-sm"
+      style={{ backdropFilter: "blur(12px)" }}
+    >
+      <article className="prose prose-invert prose-sm max-w-none
+        prose-headings:text-white prose-headings:font-bold prose-headings:mb-2
+        prose-p:text-white/80 prose-p:leading-relaxed prose-p:my-1
+        prose-li:text-white/80 prose-li:my-0.5 prose-strong:text-white
+        prose-ul:my-1 prose-ol:my-1 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+        <Markdown>{content}</Markdown>
+      </article>
+      <button onClick={handleCopy} className="text-[10px] text-white/20 hover:text-white/50 transition-colors cursor-pointer mt-2">
+        {copied ? "Copied" : "Copy"}
+      </button>
     </div>
   );
 }
@@ -560,6 +602,7 @@ function BoardroomContent() {
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // On phones the 288px sidebar was eating almost the entire viewport,
   // leaving the boardroom itself an unusable sliver. Start collapsed there.
@@ -654,6 +697,8 @@ function BoardroomContent() {
     let finalCreditsUsed = 0;
     let finalSuggested: string[] = [];
     let streamError = "";
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
       const res = await fetch("/api/boardroom", {
@@ -663,6 +708,7 @@ function BoardroomContent() {
           startup_idea: text,
           website_url: websiteUrl || undefined,
         }),
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -762,11 +808,21 @@ function BoardroomContent() {
         setTimeout(() => setShowPaywall(true), 1800);
       }
     } catch (err) {
-      setActiveResult(null);
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      if (controller.signal.aborted) {
+        // User hit "stop" — leave whatever partial board/agent text already
+        // streamed onto activeResult in place rather than clearing it.
+      } else {
+        setActiveResult(null);
+        setError(err instanceof Error ? err.message : "Something went wrong.");
+      }
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
+  }
+
+  function handleStopGenerating() {
+    abortControllerRef.current?.abort();
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -1124,17 +1180,15 @@ function BoardroomContent() {
 
                   <button
                     id="boardroom-submit-btn"
-                    type="submit"
-                    disabled={!input.trim() || depleted || isLoading}
+                    type={isLoading ? "button" : "submit"}
+                    onClick={isLoading ? handleStopGenerating : undefined}
+                    disabled={!isLoading && (!input.trim() || depleted)}
                     className="flex items-center gap-2 px-5 py-2 rounded-xl font-bold text-sm text-black bg-white hover:bg-white/90 disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.97] transition-all duration-200 cursor-pointer"
                   >
                     {isLoading ? (
                       <>
-                        <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                        </svg>
-                        Convening…
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+                        Stop
                       </>
                     ) : (
                       <>
@@ -1147,18 +1201,15 @@ function BoardroomContent() {
             </form>
           </div>
 
-          {/* Error banner */}
+          {/* Error banner — input isn't cleared on failure, so retry just re-submits it */}
           {error && (
-            <div className="mb-6 px-4 py-3 rounded-xl bg-red-500/8 border border-red-500/15 flex items-center gap-2">
-              <svg className="w-3.5 h-3.5 text-red-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" />
-              </svg>
-              <p className="text-xs text-red-300 flex-1">{error}</p>
-              <button onClick={() => setError("")} className="text-red-400/50 hover:text-red-400 cursor-pointer">
-                <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
+            <div className="mb-6">
+              <ErrorBanner
+                message={error}
+                onDismiss={() => setError("")}
+                actionLabel={input.trim() ? "Retry" : undefined}
+                onAction={input.trim() ? () => handleSubmit() : undefined}
+              />
             </div>
           )}
 
@@ -1260,18 +1311,7 @@ function BoardroomContent() {
                       <div className="w-7 h-7 rounded-full bg-white/10 border border-white/15 flex items-center justify-center text-xs font-bold text-white shrink-0 mt-0.5">
                         B
                       </div>
-                      <div
-                        className="flex-1 rounded-2xl rounded-tl-sm px-4 py-3 bg-white/5 border border-white/8 text-sm"
-                        style={{ backdropFilter: "blur(12px)" }}
-                      >
-                        <article className="prose prose-invert prose-sm max-w-none
-                          prose-headings:text-white prose-headings:font-bold prose-headings:mb-2
-                          prose-p:text-white/80 prose-p:leading-relaxed prose-p:my-1
-                          prose-li:text-white/80 prose-li:my-0.5 prose-strong:text-white
-                          prose-ul:my-1 prose-ol:my-1 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-                          <Markdown>{r.reply}</Markdown>
-                        </article>
-                      </div>
+                      <AnswerReply content={r.reply} />
                     </div>
 
                     <div className="mt-1 pl-10">

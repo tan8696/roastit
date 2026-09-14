@@ -44,8 +44,19 @@ export default async function Image({ params }: { params: { slug: string } }) {
           fontFamily: "sans-serif",
         }}
       >
-        <div style={{ display: "flex", fontSize: 32, fontWeight: 900, color: "#ffffff" }}>
-          BRUTAL<span style={{ color: "rgba(255,255,255,0.3)" }}>.</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M1 7V1H7 M17 1H23V7 M23 17V23H17 M7 23H1V17"
+              stroke="#fff"
+              strokeWidth="2.5"
+              strokeLinecap="square"
+            />
+            <rect x="10" y="10" width="4" height="4" fill="#fff" />
+          </svg>
+          <div style={{ display: "flex", fontSize: 32, fontWeight: 900, color: "#ffffff" }}>
+            BRUTAL<span style={{ color: "rgba(255,255,255,0.3)" }}>.</span>
+          </div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 48 }}>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/Skeleton";
+import { Logo } from "@/components/Logo";
 
 const Scanner = dynamic(() => import("@/components/Scanner"), { ssr: false });
 
@@ -415,7 +416,8 @@ export default function DashboardHome() {
       <div className="relative z-10 max-w-3xl mx-auto px-5 pt-20 pb-24">
         {/* Top nav */}
         <nav className="flex items-center justify-between mb-20">
-          <span className="text-lg font-black tracking-tight text-white">
+          <span className="flex items-center gap-2 text-lg font-black tracking-tight text-white">
+            <Logo size={18} />
             BRUTAL<span className="text-white/25">.</span>
           </span>
           <AccountMenu

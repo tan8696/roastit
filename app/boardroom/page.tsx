@@ -15,6 +15,7 @@ import Markdown from "react-markdown";
 import AdBanner from "@/components/AdBanner";
 import { Skeleton } from "@/components/Skeleton";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { Logo } from "@/components/Logo";
 
 const Scanner = dynamic(() => import("@/components/Scanner"), { ssr: false });
 
@@ -674,7 +675,8 @@ function BoardroomContent() {
         {/* Brand */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/8 shrink-0">
           <div>
-            <span className="text-base font-black tracking-tight text-white">
+            <span className="flex items-center gap-2 text-base font-black tracking-tight text-white">
+              <Logo size={16} />
               BRUTAL<span className="text-white/25">.</span>
             </span>
             <span className="ml-2 text-[10px] text-violet-400/80 font-semibold uppercase tracking-wider">

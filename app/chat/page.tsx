@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import Markdown from "react-markdown";
 import { Skeleton } from "@/components/Skeleton";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { Logo } from "@/components/Logo";
 
 const Scanner = dynamic(() => import("@/components/Scanner"), { ssr: false });
 
@@ -597,7 +598,10 @@ function ChatContent() {
       >
         {/* Brand + home */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/8 shrink-0">
-          <span className="text-base font-black tracking-tight text-white">BRUTAL<span className="text-white/25">.</span></span>
+          <span className="flex items-center gap-2 text-base font-black tracking-tight text-white">
+            <Logo size={16} />
+            BRUTAL<span className="text-white/25">.</span>
+          </span>
           <button onClick={() => router.push("/")} className="text-xs text-white/30 hover:text-white transition-colors cursor-pointer">← Home</button>
         </div>
 

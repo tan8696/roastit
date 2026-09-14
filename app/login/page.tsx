@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import dynamic from "next/dynamic";
 import PrivacyContent from "@/components/PrivacyContent";
+import { Logo } from "@/components/Logo";
 
 const Scanner = dynamic(() => import("@/components/Scanner"), { ssr: false });
 
@@ -149,6 +150,7 @@ export default function LoginPage() {
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-4 py-12">
         {/* Brand */}
         <div className="mb-8 text-center select-none">
+          <Logo size={32} className="mx-auto mb-4 text-white" />
           <p className="text-xs font-semibold tracking-[0.3em] uppercase text-white/40 mb-2">
             AI Landing Page Teardown
           </p>
